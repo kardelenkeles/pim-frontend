@@ -1,65 +1,148 @@
-import Image from "next/image";
+import { Breadcrumb } from '@/components/layout/Breadcrumb';
+import { Button } from '@/components/ui/Button';
+import { Table } from '@/components/ui/Table';
 
 export default function Home() {
+  // Sample data for dashboard
+  const stats = [
+    { label: 'Total Products', value: '1,234', change: '+12.5%', isPositive: true },
+    { label: 'Categories', value: '48', change: '+3.2%', isPositive: true },
+    { label: 'Brands', value: '156', change: '-2.1%', isPositive: false },
+    { label: 'Active Users', value: '89', change: '+5.8%', isPositive: true },
+  ];
+
+  const recentProducts = [
+    { id: 1, name: 'Product A', category: 'Electronics', price: '$299', status: 'Active' },
+    { id: 2, name: 'Product B', category: 'Clothing', price: '$49', status: 'Active' },
+    { id: 3, name: 'Product C', category: 'Home', price: '$129', status: 'Draft' },
+    { id: 4, name: 'Product D', category: 'Electronics', price: '$599', status: 'Active' },
+  ];
+
+  const columns = [
+    { key: 'name', header: 'Product Name' },
+    { key: 'category', header: 'Category' },
+    { key: 'price', header: 'Price' },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (item: any) => (
+        <span
+          className={`px-2 py-1 text-xs rounded-full ${item.status === 'Active'
+              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
+            }`}
+        >
+          {item.status}
+        </span>
+      ),
+    },
+  ];
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      <Breadcrumb items={[{ label: 'Dashboard' }]} />
+
+      <div className="space-y-6">
+        {/* Page Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+            <p className="mt-1 text-gray-600 dark:text-gray-400">
+              Welcome to your PIM admin panel
+            </p>
+          </div>
+          <Button variant="primary">
+            Add Product
+          </Button>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat, index) => (
+            <div
+              key={index}
+              className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700"
+            >
+              <p className="text-sm text-gray-600 dark:text-gray-400">{stat.label}</p>
+              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+                {stat.value}
+              </p>
+              <p
+                className={`mt-2 text-sm ${stat.isPositive ? 'text-green-600' : 'text-red-600'
+                  }`}
+              >
+                {stat.change}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* Recent Products Table */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Recent Products
+            </h2>
+          </div>
+          <div className="p-6">
+            <Table data={recentProducts} columns={columns} />
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Manage Products
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+              Add, edit, or remove products from your catalog
+            </p>
+            <Button variant="ghost" size="sm">
+              View All →
+            </Button>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Categories
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+              Organize your products with categories
+            </p>
+            <Button variant="ghost" size="sm">
+              View All →
+            </Button>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Reports
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+              View analytics and generate reports
+            </p>
+            <Button variant="ghost" size="sm">
+              View All →
+            </Button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
             Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+          </a >
+  <a
+    className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
+    href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    Documentation
+  </a>
+        </div >
+      </main >
+    </div >
   );
 }
