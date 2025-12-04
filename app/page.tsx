@@ -1,3 +1,5 @@
+'use client';
+
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Table } from '@/components/ui/Table';
@@ -28,8 +30,8 @@ export default function Home() {
       render: (item: any) => (
         <span
           className={`px-2 py-1 text-xs rounded-full ${item.status === 'Active'
-              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
+            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
             }`}
         >
           {item.status}
@@ -129,20 +131,5 @@ export default function Home() {
         </div>
       </div>
     </>
-  );
-}
-            Deploy Now
-          </a >
-  <a
-    className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-    href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-    target="_blank"
-    rel="noopener noreferrer"
-  >
-    Documentation
-  </a>
-        </div >
-      </main >
-    </div >
   );
 }
