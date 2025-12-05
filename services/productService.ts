@@ -87,7 +87,7 @@ class ProductService {
      * Get all products with pagination and filters
      */
     async getAll(params?: ProductFilter): Promise<ProductListResponse> {
-        const response = await apiClient.get<ProductListResponse>(this.endpoint, params as any);
+        const response = await apiClient.get<ProductListResponse>(this.endpoint, { params });
         return response;
     }
 

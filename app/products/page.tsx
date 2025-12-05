@@ -43,7 +43,6 @@ export default function ProductsPage() {
         size: 10,
     });
     const [searchInput, setSearchInput] = useState('');
-    const [barcodeInput, setBarcodeInput] = useState('');
     const [totalPages, setTotalPages] = useState(0);
     const [totalElements, setTotalElements] = useState(0);
 
@@ -120,14 +119,6 @@ export default function ProductsPage() {
         }));
     };
 
-    const handleBarcodeSearch = () => {
-        setFilters((prev) => ({
-            ...prev,
-            search: barcodeInput || undefined,
-            page: 0,
-        }));
-    };
-
     const handleFilterChange = (key: keyof ProductFilter, value: any) => {
         setFilters((prev) => ({
             ...prev,
@@ -138,7 +129,6 @@ export default function ProductsPage() {
 
     const clearFilters = () => {
         setSearchInput('');
-        setBarcodeInput('');
         setFilters({
             search: '',
             categoryId: undefined,
@@ -404,7 +394,7 @@ export default function ProductsPage() {
                         </div>
                     )}
 
-                    {/* Pagination */}
+                    {/* Pagination */}s
                     {totalPages > 1 && (
                         <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
                             <p className="text-sm text-gray-600 dark:text-gray-400">
