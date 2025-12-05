@@ -52,7 +52,6 @@ class DashboardService {
     }): Promise<Blob> {
         return apiClient.get<Blob>(`${this.productsEndpoint}/export`, {
             params: { format, ...params },
-            responseType: 'blob',
         });
     }
 
