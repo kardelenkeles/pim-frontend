@@ -193,7 +193,7 @@ export default function BrandsPage() {
                                     placeholder="Search brands..."
                                     value={searchInput}
                                     onChange={(e) => setSearchInput(e.target.value)}
-                                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                                 />
                                 <Button variant="primary" onClick={handleSearch}>
                                     Search

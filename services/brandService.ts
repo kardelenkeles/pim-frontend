@@ -36,6 +36,15 @@ export interface ApiResponse<T> {
     data: T[];
 }
 
+// Backend's actual paginated response format
+interface BackendPageResponse<T> {
+    data: T[];
+    total: number;
+    page: number;
+    size: number;
+    totalPages: number;
+}
+
 class BrandService {
     private readonly endpoint = '/brands';
 
@@ -54,9 +63,21 @@ class BrandService {
             backendParams.sort = `${params.sortBy},${params.sortDirection}`;
         }
 
-        return apiClient.get<PageResponse<Brand>>(this.endpoint, {
+        const response = await apiClient.get<BackendPageResponse<Brand>>(this.endpoint, {
             params: backendParams
         });
+
+        // Transform backend response to PageResponse format
+        return {
+            content: response.data,
+            totalElements: response.total,
+            totalPages: response.totalPages,
+            size: response.size,
+            number: response.page,
+            first: response.page === 0,
+            last: response.page >= response.totalPages - 1,
+            empty: response.data.length === 0,
+        };
     }
 
     /**
@@ -108,6 +129,7 @@ class BrandService {
      */
     async search(keyword: string, params?: { page?: number; size?: number; sortBy?: string; sortDirection?: string }): Promise<PageResponse<Brand>> {
         const backendParams: any = {
+            paginated: true,
             keyword,
             page: params?.page,
             size: params?.size,
@@ -118,9 +140,22 @@ class BrandService {
             backendParams.sort = `${params.sortBy},${params.sortDirection}`;
         }
 
-        return apiClient.get<PageResponse<Brand>>(`${this.endpoint}/search`, {
+        // Ana endpoint'i keyword parametresiyle kullan
+        const response = await apiClient.get<BackendPageResponse<Brand>>(this.endpoint, {
             params: backendParams,
         });
+
+        // Transform backend response to PageResponse format
+        return {
+            content: response.data,
+            totalElements: response.total,
+            totalPages: response.totalPages,
+            size: response.size,
+            number: response.page,
+            first: response.page === 0,
+            last: response.page >= response.totalPages - 1,
+            empty: response.data.length === 0,
+        };
     }
 }
 
