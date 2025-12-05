@@ -19,7 +19,7 @@ const productSchema = z.object({
     barcode: z.string().optional(),
     categoryId: z.number().min(1, 'Category is required'),
     brandId: z.number().optional(),
-    status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
+    status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']).optional(),
     quality: z.string().optional(),
     attributes: z.record(z.string(), z.any()).optional(),
 });
@@ -153,7 +153,7 @@ export default function ProductEditPage() {
     const loadInitialData = async () => {
         try {
             const [brandsData, categoriesData] = await Promise.all([
-                brandService.getAll({ size: 1000 }),
+                brandService.getAllUnpaginated(),
                 categoryService.getTree(),
             ]);
             setBrands(brandsData.data);
