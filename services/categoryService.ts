@@ -61,9 +61,20 @@ class CategoryService {
     /**
      * Get all categories with pagination
      */
-    async getAll(params?: PageRequest & { paginated?: boolean }): Promise<PageResponse<Category>> {
+    async getAll(params?: PageRequest & { paginated?: boolean; sortBy?: string; sortDirection?: string }): Promise<PageResponse<Category>> {
+        const backendParams: any = {
+            paginated: true,
+            page: params?.page,
+            size: params?.size,
+        };
+
+        // Sort parametresini field,direction formatında ekle
+        if (params?.sortBy && params?.sortDirection) {
+            backendParams.sort = `${params.sortBy},${params.sortDirection}`;
+        }
+
         return apiClient.get<PageResponse<Category>>(this.endpoint, {
-            params: { paginated: true, ...params }
+            params: backendParams
         });
     }
 
@@ -135,9 +146,20 @@ class CategoryService {
     /**
      * Search categories by keyword
      */
-    async search(keyword: string, params?: { page?: number; size?: number }): Promise<PageResponse<Category>> {
+    async search(keyword: string, params?: { page?: number; size?: number; sortBy?: string; sortDirection?: string }): Promise<PageResponse<Category>> {
+        const backendParams: any = {
+            keyword,
+            page: params?.page,
+            size: params?.size,
+        };
+
+        // Sort parametresini field,direction formatında ekle
+        if (params?.sortBy && params?.sortDirection) {
+            backendParams.sort = `${params.sortBy},${params.sortDirection}`;
+        }
+
         return apiClient.get<PageResponse<Category>>(`${this.endpoint}/search`, {
-            params: { keyword, ...params },
+            params: backendParams,
         });
     }
 

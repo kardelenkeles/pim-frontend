@@ -8,6 +8,7 @@ import { DndContext, rectIntersection, DragEndEvent, DragOverlay, useSensor, use
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { Button } from '@/components/ui/Button';
+import { Table } from '@/components/ui/Table';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import {
@@ -165,6 +166,17 @@ export default function CategoriesPage() {
     const [error, setError] = useState<string | null>(null);
     const [activeId, setActiveId] = useState<string | null>(null);
 
+    // View mode: 'tree' or 'list'
+    const [viewMode, setViewMode] = useState<'tree' | 'list'>('tree');
+
+    // List view state
+    const [currentPage, setCurrentPage] = useState(0);
+    const [pageSize, setPageSize] = useState(10);
+    const [sortBy, setSortBy] = useState('createdAt');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+    const [searchKeyword, setSearchKeyword] = useState('');
+    const [searchInput, setSearchInput] = useState('');
+
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
@@ -193,11 +205,21 @@ export default function CategoriesPage() {
     const { data: categoriesTreeData, isLoading } = useQuery({
         queryKey: ['categories', 'tree'],
         queryFn: () => categoryService.getTree(),
+        enabled: viewMode === 'tree',
     });
 
     const { data: allCategoriesData } = useQuery({
         queryKey: ['categories', 'all'],
         queryFn: () => categoryService.getAllUnpaginated(),
+    });
+
+    // Paginated query for list view
+    const { data: paginatedCategoriesData, isLoading: isLoadingList } = useQuery({
+        queryKey: ['categories', 'paginated', currentPage, pageSize, sortBy, sortDirection, searchKeyword],
+        queryFn: () => searchKeyword
+            ? categoryService.search(searchKeyword, { page: currentPage, size: pageSize, sortBy, sortDirection })
+            : categoryService.getAll({ page: currentPage, size: pageSize, sortBy, sortDirection, paginated: true }),
+        enabled: viewMode === 'list',
     });
 
     // Handle different response formats from backend
@@ -319,6 +341,17 @@ export default function CategoriesPage() {
         moveMutation.mutate({ id: selectedCategory.id, newParentId: parentId });
     };
 
+    const handleSearch = () => {
+        setSearchKeyword(searchInput);
+        setCurrentPage(0);
+    };
+
+    const clearSearch = () => {
+        setSearchInput('');
+        setSearchKeyword('');
+        setCurrentPage(0);
+    };
+
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
         setActiveId(null);
@@ -405,10 +438,99 @@ export default function CategoriesPage() {
                             Manage your product categories hierarchy
                         </p>
                     </div>
-                    <Button variant="primary" onClick={() => openAddModal()}>
-                        Add Root Category
-                    </Button>
+                    <div className="flex gap-2">
+                        <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                            <button
+                                onClick={() => setViewMode('tree')}
+                                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'tree'
+                                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                    }`}
+                            >
+                                Tree View
+                            </button>
+                            <button
+                                onClick={() => setViewMode('list')}
+                                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'list'
+                                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                    }`}
+                            >
+                                List View
+                            </button>
+                        </div>
+                        <Button variant="primary" onClick={() => openAddModal()}>
+                            Add Root Category
+                        </Button>
+                    </div>
                 </div>
+
+                {/* Search and Sort Bar - Only for List View */}
+                {viewMode === 'list' && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                            {/* Search */}
+                            <div className="lg:col-span-2">
+                                <div className="flex gap-2">
+                                    <Input
+                                        placeholder="Search categories..."
+                                        value={searchInput}
+                                        onChange={(e) => setSearchInput(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                                    />
+                                    <Button variant="primary" onClick={handleSearch}>
+                                        Search
+                                    </Button>
+                                    {searchKeyword && (
+                                        <Button variant="ghost" onClick={clearSearch}>
+                                            Clear
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Sort By */}
+                            <div>
+                                <select
+                                    value={sortBy}
+                                    onChange={(e) => { setSortBy(e.target.value); setCurrentPage(0); }}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                                >
+                                    <option value="createdAt">Created Date</option>
+                                    <option value="updatedAt">Updated Date</option>
+                                    <option value="name">Name</option>
+                                    <option value="order">Order</option>
+                                </select>
+                            </div>
+
+                            {/* Sort Direction */}
+                            <div>
+                                <select
+                                    value={sortDirection}
+                                    onChange={(e) => { setSortDirection(e.target.value as 'asc' | 'desc'); setCurrentPage(0); }}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                                >
+                                    <option value="asc">Ascending</option>
+                                    <option value="desc">Descending</option>
+                                </select>
+                            </div>
+
+                            {/* Page Size */}
+                            <div>
+                                <select
+                                    value={pageSize}
+                                    onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(0); }}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                                >
+                                    <option value="10">10 per page</option>
+                                    <option value="25">25 per page</option>
+                                    <option value="50">50 per page</option>
+                                    <option value="100">100 per page</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Error Message */}
                 {error && (
@@ -417,45 +539,133 @@ export default function CategoriesPage() {
                     </div>
                 )}
 
-                {/* Categories Tree */}
+                {/* Categories Tree or List */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">
-                    {isLoading ? (
-                        <div className="p-8 text-center">
-                            <p className="text-gray-500 dark:text-gray-400">Loading categories...</p>
-                        </div>
-                    ) : categoriesTree.length === 0 ? (
-                        <div className="p-8 text-center">
-                            <p className="text-gray-500 dark:text-gray-400">No categories found</p>
-                        </div>
+                    {viewMode === 'tree' ? (
+                        /* Tree View */
+                        isLoading ? (
+                            <div className="p-8 text-center">
+                                <p className="text-gray-500 dark:text-gray-400">Loading categories...</p>
+                            </div>
+                        ) : categoriesTree.length === 0 ? (
+                            <div className="p-8 text-center">
+                                <p className="text-gray-500 dark:text-gray-400">No categories found</p>
+                            </div>
+                        ) : (
+                            <div className="p-6">
+                                <DndContext
+                                    sensors={sensors}
+                                    collisionDetection={rectIntersection}
+                                    onDragStart={handleDragStart}
+                                    onDragEnd={handleDragEnd}
+                                    onDragCancel={handleDragCancel}
+                                >
+                                    <RootDropZone />
+                                    {categoriesTree.map((category) => (
+                                        <TreeNode
+                                            key={category.id}
+                                            category={category}
+                                            onEdit={openEditModal}
+                                            onDelete={openDeleteModal}
+                                            onMove={openMoveModal}
+                                            onAddChild={openAddModal}
+                                        />
+                                    ))}
+                                    <DragOverlay>
+                                        {activeId && (
+                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border-2 border-blue-500">
+                                                Dragging...
+                                            </div>
+                                        )}
+                                    </DragOverlay>
+                                </DndContext>
+                            </div>
+                        )
                     ) : (
-                        <div className="p-6">
-                            <DndContext
-                                sensors={sensors}
-                                collisionDetection={rectIntersection}
-                                onDragStart={handleDragStart}
-                                onDragEnd={handleDragEnd}
-                                onDragCancel={handleDragCancel}
-                            >
-                                <RootDropZone />
-                                {categoriesTree.map((category) => (
-                                    <TreeNode
-                                        key={category.id}
-                                        category={category}
-                                        onEdit={openEditModal}
-                                        onDelete={openDeleteModal}
-                                        onMove={openMoveModal}
-                                        onAddChild={openAddModal}
+                        /* List View */
+                        isLoadingList ? (
+                            <div className="p-8 text-center">
+                                <p className="text-gray-500 dark:text-gray-400">Loading categories...</p>
+                            </div>
+                        ) : !paginatedCategoriesData?.content || paginatedCategoriesData.content.length === 0 ? (
+                            <div className="p-8 text-center">
+                                <p className="text-gray-500 dark:text-gray-400">No categories found</p>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="p-6">
+                                    <Table
+                                        data={paginatedCategoriesData.content}
+                                        columns={[
+                                            { key: 'name', header: 'Name' },
+                                            { key: 'slug', header: 'Slug' },
+                                            {
+                                                key: 'parentCategoryId',
+                                                header: 'Parent',
+                                                render: (cat: Category) => {
+                                                    const parent = allCategories.find(c => c.id === cat.parentCategoryId);
+                                                    return parent ? parent.name : '-';
+                                                }
+                                            },
+                                            {
+                                                key: 'productCount',
+                                                header: 'Products',
+                                                render: (cat: Category) => cat.productCount || 0,
+                                            },
+                                            {
+                                                key: 'createdAt',
+                                                header: 'Created At',
+                                                render: (cat: Category) => new Date(cat.createdAt).toLocaleDateString(),
+                                            },
+                                            {
+                                                key: 'actions',
+                                                header: 'Actions',
+                                                render: (cat: Category) => (
+                                                    <div className="flex gap-2">
+                                                        <Button variant="ghost" size="sm" onClick={() => openAddModal(cat.id)}>
+                                                            Add Child
+                                                        </Button>
+                                                        <Button variant="ghost" size="sm" onClick={() => openEditModal(cat)}>
+                                                            Edit
+                                                        </Button>
+                                                        <Button variant="danger" size="sm" onClick={() => openDeleteModal(cat)}>
+                                                            Delete
+                                                        </Button>
+                                                    </div>
+                                                ),
+                                            },
+                                        ]}
                                     />
-                                ))}
-                                <DragOverlay>
-                                    {activeId ? (
-                                        <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-3 border-2 border-primary">
-                                            <span className="font-medium">Dragging...</span>
+                                </div>
+                                {/* Pagination */}
+                                {paginatedCategoriesData.totalElements > pageSize && (
+                                    <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                                            Page {currentPage + 1} of {Math.ceil(paginatedCategoriesData.totalElements / pageSize)}
+                                            ({paginatedCategoriesData.totalElements} total)
+                                        </p>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                                                disabled={currentPage === 0}
+                                            >
+                                                Previous
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setCurrentPage((p) => Math.min(Math.ceil(paginatedCategoriesData.totalElements / pageSize) - 1, p + 1))}
+                                                disabled={currentPage >= Math.ceil(paginatedCategoriesData.totalElements / pageSize) - 1}
+                                            >
+                                                Next
+                                            </Button>
                                         </div>
-                                    ) : null}
-                                </DragOverlay>
-                            </DndContext>
-                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )
                     )}
                 </div>
             </div>
