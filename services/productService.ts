@@ -73,12 +73,6 @@ export const updateProductSchema = z.object({
 export type CreateProductDto = z.infer<typeof createProductSchema>;
 export type UpdateProductDto = z.infer<typeof updateProductSchema>;
 
-// Backend response yapısı
-export interface ProductListResponse {
-    data: Product[];
-    total: number;
-}
-
 export interface ProductFilter {
     keyword?: string;
     categoryId?: number;

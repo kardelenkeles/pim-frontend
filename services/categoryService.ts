@@ -51,10 +51,6 @@ export interface CategoryTree extends Category {
     subCategories: CategoryTree[];
 }
 
-export interface CategoryTreeResponse {
-    data: CategoryTree[];
-}
-
 export interface ApiResponse<T> {
     data: T[];
 }
@@ -134,6 +130,15 @@ class CategoryService {
      */
     async delete(id: number): Promise<void> {
         return apiClient.delete<void>(`${this.endpoint}/${id}`);
+    }
+
+    /**
+     * Search categories by keyword
+     */
+    async search(keyword: string, params?: { page?: number; size?: number }): Promise<PageResponse<Category>> {
+        return apiClient.get<PageResponse<Category>>(`${this.endpoint}/search`, {
+            params: { keyword, ...params },
+        });
     }
 
     /**
