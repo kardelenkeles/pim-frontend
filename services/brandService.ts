@@ -129,7 +129,6 @@ class BrandService {
      */
     async search(keyword: string, params?: { page?: number; size?: number; sortBy?: string; sortDirection?: string }): Promise<PageResponse<Brand>> {
         const backendParams: any = {
-            paginated: true,
             keyword,
             page: params?.page,
             size: params?.size,
@@ -140,8 +139,8 @@ class BrandService {
             backendParams.sort = `${params.sortBy},${params.sortDirection}`;
         }
 
-        // Ana endpoint'i keyword parametresiyle kullan
-        const response = await apiClient.get<BackendPageResponse<Brand>>(this.endpoint, {
+        // /brands/search endpoint'ini kullan
+        const response = await apiClient.get<BackendPageResponse<Brand>>(`${this.endpoint}/search`, {
             params: backendParams,
         });
 
