@@ -20,7 +20,7 @@ import {
     updateProductSchema,
 } from '@/services/productService';
 import { brandService, type Brand } from '@/services/brandService';
-import { categoryService, type Category } from '@/services/categoryService';
+import { categoryService, type Category, type CategoryTree } from '@/services/categoryService';
 import { ApiError } from '@/lib/apiClient';
 
 type ModalMode = 'add' | 'edit' | 'delete' | null;
@@ -54,17 +54,31 @@ export default function ProductsPage() {
         queryFn: () => brandService.getAll({ size: 1000 }),
     });
 
-    // TanStack Query - Categories
-    const { data: categoriesData } = useQuery({
-        queryKey: ['categories'],
-        queryFn: () => categoryService.getAll({ size: 1000 }),
+    // TanStack Query - Categories (Tree structure)
+    const { data: categoriesTreeData } = useQuery({
+        queryKey: ['categories', 'tree'],
+        queryFn: () => categoryService.getTree(),
     });
 
     const products = productsData?.data || [];
     const totalElements = productsData?.total || 0;
     const totalPages = Math.ceil(totalElements / (filters.size || 10));
     const brands = brandsData?.data || [];
-    const categories = Array.isArray(categoriesData) ? categoriesData : categoriesData?.content || [];
+    const categoriesTree = categoriesTreeData?.data || [];
+
+    // Flatten categories for filter dropdown
+    const flattenCategories = (cats: CategoryTree[], level = 0): Array<Category & { level: number }> => {
+        let result: Array<Category & { level: number }> = [];
+        cats.forEach((cat) => {
+            result.push({ ...cat, level });
+            if (cat.subCategories && cat.subCategories.length > 0) {
+                result = result.concat(flattenCategories(cat.subCategories, level + 1));
+            }
+        });
+        return result;
+    };
+
+    const categories = flattenCategories(categoriesTree);
 
     // React Hook Form
     const createForm = useForm<CreateProductDto>({
@@ -335,6 +349,8 @@ export default function ProductsPage() {
                                 <option value="">All Categories</option>
                                 {categories?.map((cat) => (
                                     <option key={cat.id} value={cat.id}>
+                                        {'  '.repeat(cat.level)}
+                                        {cat.level > 0 && '└─ '}
                                         {cat.name}
                                     </option>
                                 ))}
