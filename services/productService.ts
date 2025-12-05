@@ -1,112 +1,83 @@
 import { apiClient } from '@/lib/apiClient';
 import type { PageRequest, PageResponse } from '@/types/api';
+import { z } from 'zod';
 
+// Backend'den gelen ProductImage yapısı
+export interface ProductImage {
+    id?: number;
+    imageUrl: string;
+    altText?: string;
+    order: number;
+}
+
+// Backend'den gelen Product yapısı
 export interface Product {
     id: number;
-    name: string;
-    slug: string;
-    sku: string;
     barcode?: string;
-    description?: string;
-    shortDescription?: string;
     categoryId: number;
     categoryName?: string;
     brandId?: number;
     brandName?: string;
-    price: number;
-    compareAtPrice?: number;
-    costPrice?: number;
-    stock: number;
-    lowStockThreshold?: number;
-    weight?: number;
-    dimensions?: {
-        length?: number;
-        width?: number;
-        height?: number;
-    };
-    images?: string[];
-    primaryImage?: string;
-    isActive: boolean;
-    isFeatured: boolean;
-    tags?: string[];
+    title: string;
+    description?: string;
+    status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+    quality?: string | null;
     attributes?: Record<string, any>;
-    seoTitle?: string;
-    seoDescription?: string;
-    seoKeywords?: string[];
+    images?: ProductImage[];
     createdAt: string;
     updatedAt: string;
 }
 
-export interface CreateProductDto {
-    name: string;
-    sku: string;
-    barcode?: string;
-    description?: string;
-    shortDescription?: string;
-    categoryId: number;
-    brandId?: number;
-    price: number;
-    compareAtPrice?: number;
-    costPrice?: number;
-    stock: number;
-    lowStockThreshold?: number;
-    weight?: number;
-    dimensions?: {
-        length?: number;
-        width?: number;
-        height?: number;
-    };
-    images?: string[];
-    primaryImage?: string;
-    isActive?: boolean;
-    isFeatured?: boolean;
-    tags?: string[];
-    attributes?: Record<string, any>;
-    seoTitle?: string;
-    seoDescription?: string;
-    seoKeywords?: string[];
-}
+// Zod Schema - Create Product
+export const createProductSchema = z.object({
+    barcode: z.string().min(1, 'Barcode is required'),
+    categoryId: z.number().min(1, 'Category is required'),
+    brandId: z.number().optional(),
+    title: z.string().min(1, 'Title is required').max(255, 'Title is too long'),
+    description: z.string().optional(),
+    status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
+    quality: z.string().optional(),
+    attributes: z.record(z.string(), z.any()).optional(),
+    images: z.array(z.object({
+        imageUrl: z.string().url('Invalid image URL'),
+        altText: z.string().optional(),
+        order: z.number().min(0)
+    })).optional()
+});
 
-export interface UpdateProductDto {
-    name?: string;
-    sku?: string;
-    barcode?: string;
-    description?: string;
-    shortDescription?: string;
-    categoryId?: number;
-    brandId?: number;
-    price?: number;
-    compareAtPrice?: number;
-    costPrice?: number;
-    stock?: number;
-    lowStockThreshold?: number;
-    weight?: number;
-    dimensions?: {
-        length?: number;
-        width?: number;
-        height?: number;
-    };
-    images?: string[];
-    primaryImage?: string;
-    isActive?: boolean;
-    isFeatured?: boolean;
-    tags?: string[];
-    attributes?: Record<string, any>;
-    seoTitle?: string;
-    seoDescription?: string;
-    seoKeywords?: string[];
+// Zod Schema - Update Product
+export const updateProductSchema = z.object({
+    barcode: z.string().min(1, 'Barcode is required').optional(),
+    categoryId: z.number().min(1, 'Category is required').optional(),
+    brandId: z.number().optional(),
+    title: z.string().min(1, 'Title is required').max(255, 'Title is too long').optional(),
+    description: z.string().optional(),
+    status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
+    quality: z.string().optional(),
+    attributes: z.record(z.string(), z.any()).optional(),
+    images: z.array(z.object({
+        id: z.number().optional(),
+        imageUrl: z.string().url('Invalid image URL'),
+        altText: z.string().optional(),
+        order: z.number().min(0)
+    })).optional()
+});
+
+export type CreateProductDto = z.infer<typeof createProductSchema>;
+export type UpdateProductDto = z.infer<typeof updateProductSchema>;
+
+// Backend response yapısı
+export interface ProductListResponse {
+    data: Product[];
+    total: number;
 }
 
 export interface ProductFilter extends PageRequest {
     search?: string;
     categoryId?: number;
     brandId?: number;
-    minPrice?: number;
-    maxPrice?: number;
-    isActive?: boolean;
-    isFeatured?: boolean;
-    inStock?: boolean;
-    tags?: string[];
+    status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+    quality?: string;
 }
 
 class ProductService {
@@ -115,8 +86,9 @@ class ProductService {
     /**
      * Get all products with pagination and filters
      */
-    async getAll(params?: ProductFilter): Promise<PageResponse<Product>> {
-        return apiClient.get<PageResponse<Product>>(this.endpoint, { params });
+    async getAll(params?: ProductFilter): Promise<ProductListResponse> {
+        const response = await apiClient.get<ProductListResponse>(this.endpoint, params as any);
+        return response;
     }
 
     /**

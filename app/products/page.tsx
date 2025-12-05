@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Table } from '@/components/ui/Table';
@@ -12,6 +14,8 @@ import {
     type CreateProductDto,
     type UpdateProductDto,
     type ProductFilter,
+    createProductSchema,
+    updateProductSchema,
 } from '@/services/productService';
 import { brandService, type Brand } from '@/services/brandService';
 import { categoryService, type Category } from '@/services/categoryService';
@@ -34,6 +38,7 @@ export default function ProductsPage() {
         search: '',
         categoryId: undefined,
         brandId: undefined,
+        status: undefined,
         page: 0,
         size: 10,
     });
@@ -42,22 +47,24 @@ export default function ProductsPage() {
     const [totalPages, setTotalPages] = useState(0);
     const [totalElements, setTotalElements] = useState(0);
 
-    // Form data
-    const [formData, setFormData] = useState<CreateProductDto | UpdateProductDto>({
-        name: '',
-        sku: '',
-        barcode: '',
-        description: '',
-        shortDescription: '',
-        categoryId: 0,
-        brandId: undefined,
-        price: 0,
-        compareAtPrice: undefined,
-        costPrice: undefined,
-        stock: 0,
-        lowStockThreshold: undefined,
-        isActive: true,
-        isFeatured: false,
+    // React Hook Form
+    const createForm = useForm<CreateProductDto>({
+        resolver: zodResolver(createProductSchema),
+        defaultValues: {
+            barcode: '',
+            categoryId: 0,
+            brandId: undefined,
+            title: '',
+            description: '',
+            quality: '',
+            attributes: {},
+            images: []
+        }
+    });
+
+    const updateForm = useForm<UpdateProductDto>({
+        resolver: zodResolver(updateProductSchema),
+        defaultValues: {}
     });
 
     useEffect(() => {
@@ -74,8 +81,9 @@ export default function ProductsPage() {
                 brandService.getAll({ size: 1000 }),
                 categoryService.getAll({ size: 1000 }),
             ]);
-            setBrands(brandsData.content);
-            setCategories(categoriesData.content);
+            // Backend array veya PageResponse döndürebilir
+            setBrands(Array.isArray(brandsData) ? brandsData : brandsData.content || []);
+            setCategories(Array.isArray(categoriesData) ? categoriesData : categoriesData.content || []);
         } catch (err) {
             console.error('Error loading initial data:', err);
         }
@@ -87,15 +95,17 @@ export default function ProductsPage() {
             setError(null);
             const response = await productService.getAll(filters);
             console.log('Loaded products response:', response);
-            setProducts(response.content);
-            setTotalPages(response.totalPages);
-            setTotalElements(response.totalElements);
+            setProducts(response.data || []);
+            setTotalElements(response.total || 0);
+            // Backend pagination hesapla
+            setTotalPages(Math.ceil((response.total || 0) / (filters.size || 10)));
         } catch (err) {
             if (err instanceof ApiError) {
                 setError(`Error loading products: ${err.message}`);
             } else {
                 setError('Failed to load products');
             }
+            setProducts([]);
             console.error('Error loading products:', err);
         } finally {
             setLoading(false);
@@ -133,6 +143,7 @@ export default function ProductsPage() {
             search: '',
             categoryId: undefined,
             brandId: undefined,
+            status: undefined,
             page: 0,
             size: 10,
         });
@@ -140,42 +151,31 @@ export default function ProductsPage() {
 
     const openAddModal = () => {
         setModalMode('add');
-        setFormData({
-            name: '',
-            sku: '',
+        createForm.reset({
             barcode: '',
-            description: '',
-            shortDescription: '',
             categoryId: 0,
             brandId: undefined,
-            price: 0,
-            compareAtPrice: undefined,
-            costPrice: undefined,
-            stock: 0,
-            lowStockThreshold: undefined,
-            isActive: true,
-            isFeatured: false,
+            title: '',
+            description: '',
+            quality: '',
+            attributes: {},
+            images: []
         });
     };
 
     const openEditModal = (product: Product) => {
         setModalMode('edit');
         setSelectedProduct(product);
-        setFormData({
-            name: product.name,
-            sku: product.sku,
+        updateForm.reset({
             barcode: product.barcode || '',
-            description: product.description || '',
-            shortDescription: product.shortDescription || '',
             categoryId: product.categoryId,
-            brandId: product.brandId || undefined,
-            price: product.price,
-            compareAtPrice: product.compareAtPrice || undefined,
-            costPrice: product.costPrice || undefined,
-            stock: product.stock,
-            lowStockThreshold: product.lowStockThreshold || undefined,
-            isActive: product.isActive,
-            isFeatured: product.isFeatured,
+            brandId: product.brandId,
+            title: product.title,
+            description: product.description || '',
+            status: product.status,
+            quality: product.quality || '',
+            attributes: product.attributes || {},
+            images: product.images || []
         });
     };
 
@@ -188,29 +188,16 @@ export default function ProductsPage() {
         setModalMode(null);
         setSelectedProduct(null);
         setError(null);
+        createForm.reset();
+        updateForm.reset();
     };
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        const { name, value, type } = e.target;
-        const checked = (e.target as HTMLInputElement).checked;
-
-        setFormData((prev) => ({
-            ...prev,
-            [name]: type === 'checkbox' ? checked : type === 'number' ? (value ? Number(value) : undefined) : value,
-        }));
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleCreateSubmit = async (data: CreateProductDto) => {
         setSubmitting(true);
         setError(null);
 
         try {
-            if (modalMode === 'add') {
-                await productService.create(formData as CreateProductDto);
-            } else if (modalMode === 'edit' && selectedProduct) {
-                await productService.update(selectedProduct.id, formData as UpdateProductDto);
-            }
+            await productService.create(data);
             await loadProducts();
             closeModal();
         } catch (err) {
@@ -219,7 +206,29 @@ export default function ProductsPage() {
             } else {
                 setError('An error occurred');
             }
-            console.error('Error submitting form:', err);
+            console.error('Error creating product:', err);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleUpdateSubmit = async (data: UpdateProductDto) => {
+        if (!selectedProduct) return;
+
+        setSubmitting(true);
+        setError(null);
+
+        try {
+            await productService.update(selectedProduct.id, data);
+            await loadProducts();
+            closeModal();
+        } catch (err) {
+            if (err instanceof ApiError) {
+                setError(`Error: ${err.message}`);
+            } else {
+                setError('An error occurred');
+            }
+            console.error('Error updating product:', err);
         } finally {
             setSubmitting(false);
         }
@@ -248,30 +257,30 @@ export default function ProductsPage() {
     };
 
     const columns = [
-        { key: 'name', header: 'Product Name' },
-        { key: 'sku', header: 'SKU' },
+        { key: 'title', header: 'Title' },
         { key: 'barcode', header: 'Barcode' },
-        {
-            key: 'price',
-            header: 'Price',
-            render: (product: Product) => `$${product.price.toFixed(2)}`,
-        },
-        { key: 'stock', header: 'Stock' },
         { key: 'categoryName', header: 'Category' },
         { key: 'brandName', header: 'Brand' },
         {
-            key: 'isActive',
+            key: 'status',
             header: 'Status',
             render: (product: Product) => (
                 <span
-                    className={`px-2 py-1 text-xs rounded-full ${product.isActive
+                    className={`px-2 py-1 text-xs rounded-full ${product.status === 'PUBLISHED'
                         ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                        : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+                        : product.status === 'DRAFT'
+                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
                         }`}
                 >
-                    {product.isActive ? 'Active' : 'Inactive'}
+                    {product.status}
                 </span>
             ),
+        },
+        {
+            key: 'createdAt',
+            header: 'Created At',
+            render: (product: Product) => new Date(product.createdAt).toLocaleDateString(),
         },
         {
             key: 'actions',
@@ -310,11 +319,11 @@ export default function ProductsPage() {
                 {/* Search and Filter Bar */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {/* Search by Name */}
+                        {/* Search by Name or Barcode */}
                         <div className="lg:col-span-2">
                             <div className="flex gap-2">
                                 <Input
-                                    placeholder="Search by name..."
+                                    placeholder="Search by name or barcode..."
                                     value={searchInput}
                                     onChange={(e) => setSearchInput(e.target.value)}
                                     onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
@@ -322,18 +331,6 @@ export default function ProductsPage() {
                                 <Button variant="primary" onClick={handleSearch}>
                                     Search
                                 </Button>
-                            </div>
-                        </div>
-
-                        {/* Search by Barcode */}
-                        <div>
-                            <div className="flex gap-2">
-                                <Input
-                                    placeholder="Barcode..."
-                                    value={barcodeInput}
-                                    onChange={(e) => setBarcodeInput(e.target.value)}
-                                    onKeyPress={(e) => e.key === 'Enter' && handleBarcodeSearch()}
-                                />
                             </div>
                         </div>
 
@@ -443,43 +440,51 @@ export default function ProductsPage() {
                 title={modalMode === 'add' ? 'Add New Product' : 'Edit Product'}
                 size="xl"
             >
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={modalMode === 'add' ? createForm.handleSubmit(handleCreateSubmit) : updateForm.handleSubmit(handleUpdateSubmit)} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input
-                            label="Product Name"
-                            name="name"
-                            value={(formData as any).name}
-                            onChange={handleInputChange}
-                            required
-                            placeholder="Enter product name"
-                        />
+                        {/* Title */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Title *
+                            </label>
+                            <input
+                                {...(modalMode === 'add' ? createForm.register('title') : updateForm.register('title'))}
+                                placeholder="Enter product title"
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                            />
+                            {modalMode === 'add' && createForm.formState.errors.title && (
+                                <p className="text-red-500 text-xs mt-1">{createForm.formState.errors.title.message}</p>
+                            )}
+                            {modalMode === 'edit' && updateForm.formState.errors.title && (
+                                <p className="text-red-500 text-xs mt-1">{updateForm.formState.errors.title.message}</p>
+                            )}
+                        </div>
 
-                        <Input
-                            label="SKU"
-                            name="sku"
-                            value={(formData as any).sku}
-                            onChange={handleInputChange}
-                            required
-                            placeholder="Enter SKU"
-                        />
+                        {/* Barcode */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Barcode *
+                            </label>
+                            <input
+                                {...(modalMode === 'add' ? createForm.register('barcode') : updateForm.register('barcode'))}
+                                placeholder="Enter barcode"
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                            />
+                            {modalMode === 'add' && createForm.formState.errors.barcode && (
+                                <p className="text-red-500 text-xs mt-1">{createForm.formState.errors.barcode.message}</p>
+                            )}
+                            {modalMode === 'edit' && updateForm.formState.errors.barcode && (
+                                <p className="text-red-500 text-xs mt-1">{updateForm.formState.errors.barcode.message}</p>
+                            )}
+                        </div>
 
-                        <Input
-                            label="Barcode"
-                            name="barcode"
-                            value={(formData as any).barcode}
-                            onChange={handleInputChange}
-                            placeholder="Enter barcode"
-                        />
-
+                        {/* Category */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                 Category *
                             </label>
                             <select
-                                name="categoryId"
-                                value={(formData as any).categoryId}
-                                onChange={handleInputChange}
-                                required
+                                {...(modalMode === 'add' ? createForm.register('categoryId', { valueAsNumber: true }) : updateForm.register('categoryId', { valueAsNumber: true }))}
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
                             >
                                 <option value="">Select Category</option>
@@ -489,16 +494,21 @@ export default function ProductsPage() {
                                     </option>
                                 ))}
                             </select>
+                            {modalMode === 'add' && createForm.formState.errors.categoryId && (
+                                <p className="text-red-500 text-xs mt-1">{createForm.formState.errors.categoryId.message}</p>
+                            )}
+                            {modalMode === 'edit' && updateForm.formState.errors.categoryId && (
+                                <p className="text-red-500 text-xs mt-1">{updateForm.formState.errors.categoryId.message}</p>
+                            )}
                         </div>
 
+                        {/* Brand */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                 Brand
                             </label>
                             <select
-                                name="brandId"
-                                value={(formData as any).brandId || ''}
-                                onChange={handleInputChange}
+                                {...(modalMode === 'add' ? createForm.register('brandId', { setValueAs: v => v === '' ? undefined : Number(v) }) : updateForm.register('brandId', { setValueAs: v => v === '' ? undefined : Number(v) }))}
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
                             >
                                 <option value="">No Brand</option>
@@ -510,113 +520,45 @@ export default function ProductsPage() {
                             </select>
                         </div>
 
-                        <Input
-                            label="Price"
-                            name="price"
-                            type="number"
-                            step="0.01"
-                            value={(formData as any).price}
-                            onChange={handleInputChange}
-                            required
-                            placeholder="0.00"
-                        />
+                        {/* Status */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Status
+                            </label>
+                            <select
+                                {...(modalMode === 'add' ? createForm.register('status') : updateForm.register('status'))}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                            >
+                                <option value="DRAFT">Draft</option>
+                                <option value="PUBLISHED">Published</option>
+                                <option value="ARCHIVED">Archived</option>
+                            </select>
+                        </div>
 
-                        <Input
-                            label="Compare At Price"
-                            name="compareAtPrice"
-                            type="number"
-                            step="0.01"
-                            value={(formData as any).compareAtPrice || ''}
-                            onChange={handleInputChange}
-                            placeholder="0.00"
-                        />
-
-                        <Input
-                            label="Cost Price"
-                            name="costPrice"
-                            type="number"
-                            step="0.01"
-                            value={(formData as any).costPrice || ''}
-                            onChange={handleInputChange}
-                            placeholder="0.00"
-                        />
-
-                        <Input
-                            label="Stock"
-                            name="stock"
-                            type="number"
-                            value={(formData as any).stock}
-                            onChange={handleInputChange}
-                            required
-                            placeholder="0"
-                        />
-
-                        <Input
-                            label="Low Stock Threshold"
-                            name="lowStockThreshold"
-                            type="number"
-                            value={(formData as any).lowStockThreshold || ''}
-                            onChange={handleInputChange}
-                            placeholder="0"
-                        />
+                        {/* Quality */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Quality
+                            </label>
+                            <input
+                                {...(modalMode === 'add' ? createForm.register('quality') : updateForm.register('quality'))}
+                                placeholder="Enter quality"
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                            />
+                        </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Short Description
-                        </label>
-                        <textarea
-                            name="shortDescription"
-                            value={(formData as any).shortDescription}
-                            onChange={handleInputChange}
-                            rows={2}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
-                            placeholder="Enter short description"
-                        />
-                    </div>
-
+                    {/* Description */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Description
                         </label>
                         <textarea
-                            name="description"
-                            value={(formData as any).description}
-                            onChange={handleInputChange}
+                            {...(modalMode === 'add' ? createForm.register('description') : updateForm.register('description'))}
                             rows={4}
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
-                            placeholder="Enter full description"
+                            placeholder="Enter product description"
                         />
-                    </div>
-
-                    <div className="flex gap-4">
-                        <div className="flex items-center">
-                            <input
-                                type="checkbox"
-                                id="isActive"
-                                name="isActive"
-                                checked={(formData as any).isActive}
-                                onChange={handleInputChange}
-                                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                            />
-                            <label htmlFor="isActive" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                                Active
-                            </label>
-                        </div>
-
-                        <div className="flex items-center">
-                            <input
-                                type="checkbox"
-                                id="isFeatured"
-                                name="isFeatured"
-                                checked={(formData as any).isFeatured}
-                                onChange={handleInputChange}
-                                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                            />
-                            <label htmlFor="isFeatured" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                                Featured
-                            </label>
-                        </div>
                     </div>
 
                     {error && (
@@ -640,7 +582,7 @@ export default function ProductsPage() {
             <Modal isOpen={modalMode === 'delete'} onClose={closeModal} title="Delete Product">
                 <div className="space-y-4">
                     <p className="text-gray-600 dark:text-gray-400">
-                        Are you sure you want to delete <strong>{selectedProduct?.name}</strong>? This action
+                        Are you sure you want to delete <strong>{selectedProduct?.title}</strong>? This action
                         cannot be undone.
                     </p>
 
