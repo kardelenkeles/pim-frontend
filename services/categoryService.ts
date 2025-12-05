@@ -1,43 +1,59 @@
 import { apiClient } from '@/lib/apiClient';
 import type { PageRequest, PageResponse } from '@/types/api';
+import { z } from 'zod';
 
 export interface Category {
     id: number;
     name: string;
     slug: string;
     description?: string;
-    parentId?: number;
-    parent?: Category;
-    children?: Category[];
-    level: number;
-    path: string;
-    imageUrl?: string;
-    isActive: boolean;
-    displayOrder: number;
+    parentCategoryId?: number;
+    order?: number;
     createdAt: string;
     updatedAt: string;
+    productCount?: number;
 }
 
 export interface CreateCategoryDto {
     name: string;
     description?: string;
-    parentId?: number;
-    imageUrl?: string;
-    isActive?: boolean;
-    displayOrder?: number;
+    parentCategoryId?: number;
+    order?: number;
 }
 
 export interface UpdateCategoryDto {
     name?: string;
     description?: string;
-    parentId?: number;
-    imageUrl?: string;
-    isActive?: boolean;
-    displayOrder?: number;
+    parentCategoryId?: number;
+    order?: number;
 }
 
+// Zod Schema - Create Category
+export const createCategorySchema = z.object({
+    name: z.string().min(1, 'Name is required').max(255, 'Name is too long'),
+    description: z.string().optional(),
+    parentCategoryId: z.number().optional(),
+    order: z.number().optional(),
+});
+
+// Zod Schema - Update Category
+export const updateCategorySchema = z.object({
+    name: z.string().min(1, 'Name is required').max(255, 'Name is too long').optional(),
+    description: z.string().optional(),
+    parentCategoryId: z.number().optional(),
+    order: z.number().optional(),
+});
+
+export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
+export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
+
 export interface CategoryTree extends Category {
-    children: CategoryTree[];
+    subCategories: CategoryTree[];
+}
+
+export interface CategoryTreeResponse {
+    data: CategoryTree[];
+    total: number;
 }
 
 class CategoryService {
@@ -67,8 +83,8 @@ class CategoryService {
     /**
      * Get category tree
      */
-    async getTree(): Promise<CategoryTree[]> {
-        return apiClient.get<CategoryTree[]>(`${this.endpoint}/tree`);
+    async getTree(): Promise<CategoryTreeResponse> {
+        return apiClient.get<CategoryTreeResponse>(`${this.endpoint}/tree`);
     }
 
     /**

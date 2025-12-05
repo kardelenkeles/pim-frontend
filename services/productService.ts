@@ -30,7 +30,7 @@ export interface Product {
 
 // Zod Schema - Create Product
 export const createProductSchema = z.object({
-    barcode: z.string().min(1, 'Barcode is required'),
+    barcode: z.string().optional(),
     categoryId: z.number().min(1, 'Category is required'),
     brandId: z.number().optional(),
     title: z.string().min(1, 'Title is required').max(255, 'Title is too long'),

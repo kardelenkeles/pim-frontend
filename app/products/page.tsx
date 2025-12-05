@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Table } from '@/components/ui/Table';
@@ -24,14 +25,10 @@ import { ApiError } from '@/lib/apiClient';
 type ModalMode = 'add' | 'edit' | 'delete' | null;
 
 export default function ProductsPage() {
-    const [products, setProducts] = useState<Product[]>([]);
-    const [brands, setBrands] = useState<Brand[]>([]);
-    const [categories, setCategories] = useState<Category[]>([]);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
     const [error, setError] = useState<string | null>(null);
     const [modalMode, setModalMode] = useState<ModalMode>(null);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-    const [submitting, setSubmitting] = useState(false);
 
     // Filter and pagination state
     const [filters, setFilters] = useState<ProductFilter>({
@@ -43,8 +40,30 @@ export default function ProductsPage() {
         size: 10,
     });
     const [searchInput, setSearchInput] = useState('');
-    const [totalPages, setTotalPages] = useState(0);
-    const [totalElements, setTotalElements] = useState(0);
+
+    // TanStack Query - Products
+    const { data: productsData, isLoading } = useQuery({
+        queryKey: ['products', filters],
+        queryFn: () => productService.getAll(filters),
+    });
+
+    // TanStack Query - Brands
+    const { data: brandsData } = useQuery({
+        queryKey: ['brands'],
+        queryFn: () => brandService.getAll({ size: 1000 }),
+    });
+
+    // TanStack Query - Categories
+    const { data: categoriesData } = useQuery({
+        queryKey: ['categories'],
+        queryFn: () => categoryService.getAll({ size: 1000 }),
+    });
+
+    const products = productsData?.data || [];
+    const totalElements = productsData?.total || 0;
+    const totalPages = Math.ceil(totalElements / (filters.size || 10));
+    const brands = Array.isArray(brandsData) ? brandsData : brandsData?.content || [];
+    const categories = Array.isArray(categoriesData) ? categoriesData : categoriesData?.content || [];
 
     // React Hook Form
     const createForm = useForm<CreateProductDto>({
@@ -66,50 +85,52 @@ export default function ProductsPage() {
         defaultValues: {}
     });
 
-    useEffect(() => {
-        loadInitialData();
-    }, []);
-
-    useEffect(() => {
-        loadProducts();
-    }, [filters]);
-
-    const loadInitialData = async () => {
-        try {
-            const [brandsData, categoriesData] = await Promise.all([
-                brandService.getAll({ size: 1000 }),
-                categoryService.getAll({ size: 1000 }),
-            ]);
-            // Backend array veya PageResponse döndürebilir
-            setBrands(Array.isArray(brandsData) ? brandsData : brandsData.content || []);
-            setCategories(Array.isArray(categoriesData) ? categoriesData : categoriesData.content || []);
-        } catch (err) {
-            console.error('Error loading initial data:', err);
-        }
-    };
-
-    const loadProducts = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const response = await productService.getAll(filters);
-            console.log('Loaded products response:', response);
-            setProducts(response.data || []);
-            setTotalElements(response.total || 0);
-            // Backend pagination hesapla
-            setTotalPages(Math.ceil((response.total || 0) / (filters.size || 10)));
-        } catch (err) {
+    // TanStack Mutations
+    const createMutation = useMutation({
+        mutationFn: (data: CreateProductDto) => productService.create(data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['products'] });
+            closeModal();
+        },
+        onError: (err: any) => {
             if (err instanceof ApiError) {
-                setError(`Error loading products: ${err.message}`);
+                setError(`Error: ${err.message}`);
             } else {
-                setError('Failed to load products');
+                setError('An error occurred');
             }
-            setProducts([]);
-            console.error('Error loading products:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
+        },
+    });
+
+    const updateMutation = useMutation({
+        mutationFn: ({ id, data }: { id: number; data: UpdateProductDto }) =>
+            productService.update(id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['products'] });
+            closeModal();
+        },
+        onError: (err: any) => {
+            if (err instanceof ApiError) {
+                setError(`Error: ${err.message}`);
+            } else {
+                setError('An error occurred');
+            }
+        },
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: (id: number) => productService.delete(id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['products'] });
+            closeModal();
+        },
+        onError: (err: any) => {
+            if (err instanceof ApiError) {
+                setError(`Error deleting product: ${err.message}`);
+            } else {
+                setError('Failed to delete product');
+            }
+        },
+    });
 
     const handleSearch = () => {
         setFilters((prev) => ({
@@ -183,67 +204,20 @@ export default function ProductsPage() {
     };
 
     const handleCreateSubmit = async (data: CreateProductDto) => {
-        setSubmitting(true);
         setError(null);
-
-        try {
-            await productService.create(data);
-            await loadProducts();
-            closeModal();
-        } catch (err) {
-            if (err instanceof ApiError) {
-                setError(`Error: ${err.message}`);
-            } else {
-                setError('An error occurred');
-            }
-            console.error('Error creating product:', err);
-        } finally {
-            setSubmitting(false);
-        }
+        createMutation.mutate(data);
     };
 
     const handleUpdateSubmit = async (data: UpdateProductDto) => {
         if (!selectedProduct) return;
-
-        setSubmitting(true);
         setError(null);
-
-        try {
-            await productService.update(selectedProduct.id, data);
-            await loadProducts();
-            closeModal();
-        } catch (err) {
-            if (err instanceof ApiError) {
-                setError(`Error: ${err.message}`);
-            } else {
-                setError('An error occurred');
-            }
-            console.error('Error updating product:', err);
-        } finally {
-            setSubmitting(false);
-        }
+        updateMutation.mutate({ id: selectedProduct.id, data });
     };
 
     const handleDelete = async () => {
         if (!selectedProduct) return;
-
-        setSubmitting(true);
         setError(null);
-
-        try {
-            await productService.delete(selectedProduct.id);
-            await loadProducts();
-            closeModal();
-        } catch (err) {
-            if (err instanceof ApiError) {
-                setError(`Error deleting product: ${err.message}`);
-            } else {
-                setError('Failed to delete product');
-            }
-            console.error('Error deleting product:', err);
-        } finally {
-            setSubmitting(false);
-        }
+        deleteMutation.mutate(selectedProduct.id);
     };
 
     const columns = [
@@ -380,7 +354,7 @@ export default function ProductsPage() {
 
                 {/* Products Table */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">
-                    {loading ? (
+                    {isLoading ? (
                         <div className="p-8 text-center">
                             <p className="text-gray-500 dark:text-gray-400">Loading products...</p>
                         </div>
@@ -394,7 +368,7 @@ export default function ProductsPage() {
                         </div>
                     )}
 
-                    {/* Pagination */}s
+                    {/* Pagination */}
                     {totalPages > 1 && (
                         <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
                             <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -558,11 +532,11 @@ export default function ProductsPage() {
                     )}
 
                     <div className="flex gap-3 justify-end pt-4">
-                        <Button type="button" variant="ghost" onClick={closeModal} disabled={submitting}>
+                        <Button type="button" variant="ghost" onClick={closeModal} disabled={createMutation.isPending || updateMutation.isPending}>
                             Cancel
                         </Button>
-                        <Button type="submit" variant="primary" disabled={submitting}>
-                            {submitting ? 'Saving...' : modalMode === 'add' ? 'Add Product' : 'Save Changes'}
+                        <Button type="submit" variant="primary" disabled={createMutation.isPending || updateMutation.isPending}>
+                            {(createMutation.isPending || updateMutation.isPending) ? 'Saving...' : modalMode === 'add' ? 'Add Product' : 'Save Changes'}
                         </Button>
                     </div>
                 </form>
@@ -583,11 +557,11 @@ export default function ProductsPage() {
                     )}
 
                     <div className="flex gap-3 justify-end pt-4">
-                        <Button variant="ghost" onClick={closeModal} disabled={submitting}>
+                        <Button variant="ghost" onClick={closeModal} disabled={deleteMutation.isPending}>
                             Cancel
                         </Button>
-                        <Button variant="danger" onClick={handleDelete} disabled={submitting}>
-                            {submitting ? 'Deleting...' : 'Delete Product'}
+                        <Button variant="danger" onClick={handleDelete} disabled={deleteMutation.isPending}>
+                            {deleteMutation.isPending ? 'Deleting...' : 'Delete Product'}
                         </Button>
                     </div>
                 </div>

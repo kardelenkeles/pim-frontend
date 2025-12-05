@@ -14,20 +14,14 @@ import { ApiError } from '@/lib/apiClient';
 
 // Zod validation schema
 const productSchema = z.object({
-    name: z.string().min(1, 'Product name is required').max(255),
+    title: z.string().min(1, 'Product title is required').max(255),
     description: z.string().optional(),
-    sku: z.string().min(1, 'SKU is required'),
     barcode: z.string().optional(),
     categoryId: z.number().min(1, 'Category is required'),
     brandId: z.number().optional(),
-    price: z.number().min(0, 'Price must be positive'),
-    compareAtPrice: z.number().optional(),
-    costPrice: z.number().optional(),
-    stock: z.number().int().min(0, 'Stock must be non-negative'),
-    lowStockThreshold: z.number().optional(),
-    shortDescription: z.string().optional(),
-    isActive: z.boolean(),
-    isFeatured: z.boolean(),
+    status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
+    quality: z.string().optional(),
+    attributes: z.record(z.string(), z.any()).optional(),
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
@@ -49,8 +43,8 @@ const TreeSelect: React.FC<TreeSelectProps> = ({ categories, value, onChange, er
             let result: Category[] = [];
             cats.forEach((cat) => {
                 result.push(cat);
-                if (cat.children && cat.children.length > 0) {
-                    result = result.concat(flattenCategories(cat.children));
+                if (cat.subCategories && cat.subCategories.length > 0) {
+                    result = result.concat(flattenCategories(cat.subCategories));
                 }
             });
             return result;
@@ -80,8 +74,8 @@ const TreeSelect: React.FC<TreeSelectProps> = ({ categories, value, onChange, er
             >
                 {category.name}
             </button>
-            {category.children &&
-                category.children.map((child) => renderTreeNode(child, level + 1))}
+            {category.subCategories &&
+                category.subCategories.map((child: CategoryTree) => renderTreeNode(child, level + 1))}
         </div>
     );
 
@@ -139,20 +133,14 @@ export default function ProductEditPage() {
     } = useForm<ProductFormData>({
         resolver: zodResolver(productSchema),
         defaultValues: {
-            name: '',
+            title: '',
             description: '',
-            sku: '',
             barcode: '',
             categoryId: 0,
             brandId: undefined,
-            price: 0,
-            compareAtPrice: undefined,
-            costPrice: undefined,
-            stock: 0,
-            lowStockThreshold: undefined,
-            shortDescription: '',
-            isActive: true,
-            isFeatured: false,
+            status: 'DRAFT',
+            quality: '',
+            attributes: {},
         },
     });
 
@@ -169,24 +157,18 @@ export default function ProductEditPage() {
                 categoryService.getTree(),
             ]);
             setBrands(brandsData.content);
-            setCategories(categoriesData);
+            setCategories(categoriesData.data);
 
             if (isEdit && productId) {
                 const product = await productService.getById(productId);
-                setValue('name', product.name);
+                setValue('title', product.title);
                 setValue('description', product.description || '');
-                setValue('sku', product.sku);
                 setValue('barcode', product.barcode || '');
                 setValue('categoryId', product.categoryId);
                 setValue('brandId', product.brandId || undefined);
-                setValue('price', product.price);
-                setValue('compareAtPrice', product.compareAtPrice || undefined);
-                setValue('costPrice', product.costPrice || undefined);
-                setValue('stock', product.stock);
-                setValue('lowStockThreshold', product.lowStockThreshold || undefined);
-                setValue('shortDescription', product.shortDescription || '');
-                setValue('isActive', product.isActive);
-                setValue('isFeatured', product.isFeatured);
+                setValue('status', product.status);
+                setValue('quality', product.quality || '');
+                setValue('attributes', product.attributes || {});
             }
         } catch (err) {
             if (err instanceof ApiError) {
@@ -270,31 +252,16 @@ export default function ProductEditPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Product Name *
+                                    Product Title *
                                 </label>
                                 <input
-                                    {...register('name')}
-                                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white ${errors.name ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                                    {...register('title')}
+                                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white ${errors.title ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                                         }`}
-                                    placeholder="Enter product name"
+                                    placeholder="Enter product title"
                                 />
-                                {errors.name && (
-                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.name.message}</p>
-                                )}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    SKU *
-                                </label>
-                                <input
-                                    {...register('sku')}
-                                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white ${errors.sku ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                                        }`}
-                                    placeholder="Enter SKU"
-                                />
-                                {errors.sku && (
-                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.sku.message}</p>
+                                {errors.title && (
+                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.title.message}</p>
                                 )}
                             </div>
 
@@ -304,9 +271,13 @@ export default function ProductEditPage() {
                                 </label>
                                 <input
                                     {...register('barcode')}
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white ${errors.barcode ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                                        }`}
                                     placeholder="Enter barcode"
                                 />
+                                {errors.barcode && (
+                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.barcode.message}</p>
+                                )}
                             </div>
 
                             <TreeSelect
@@ -340,27 +311,25 @@ export default function ProductEditPage() {
                                     Status
                                 </label>
                                 <select
-                                    {...register('isActive', {
-                                        setValueAs: (v) => v === 'true',
-                                    })}
+                                    {...register('status')}
                                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
                                 >
-                                    <option value="true">Active</option>
-                                    <option value="false">Inactive</option>
+                                    <option value="DRAFT">Draft</option>
+                                    <option value="PUBLISHED">Published</option>
+                                    <option value="ARCHIVED">Archived</option>
                                 </select>
                             </div>
-                        </div>
 
-                        <div className="mt-6">
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Short Description
-                            </label>
-                            <textarea
-                                {...register('shortDescription')}
-                                rows={2}
-                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
-                                placeholder="Brief description"
-                            />
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Quality
+                                </label>
+                                <input
+                                    {...register('quality')}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                                    placeholder="Enter quality information"
+                                />
+                            </div>
                         </div>
 
                         <div className="mt-6">
@@ -373,111 +342,6 @@ export default function ProductEditPage() {
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
                                 placeholder="Full product description"
                             />
-                        </div>
-                    </div>
-
-                    {/* Pricing & Inventory */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
-                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                            Pricing & Inventory
-                        </h2>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Price *
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    {...register('price', { valueAsNumber: true })}
-                                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white ${errors.price ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                                        }`}
-                                    placeholder="0.00"
-                                />
-                                {errors.price && (
-                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.price.message}</p>
-                                )}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Compare At Price
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    {...register('compareAtPrice', {
-                                        setValueAs: (v) => (v === '' ? undefined : Number(v)),
-                                    })}
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
-                                    placeholder="0.00"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Cost Price
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    {...register('costPrice', {
-                                        setValueAs: (v) => (v === '' ? undefined : Number(v)),
-                                    })}
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
-                                    placeholder="0.00"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Stock *
-                                </label>
-                                <input
-                                    type="number"
-                                    {...register('stock', { valueAsNumber: true })}
-                                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white ${errors.stock ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                                        }`}
-                                    placeholder="0"
-                                />
-                                {errors.stock && (
-                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.stock.message}</p>
-                                )}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Low Stock Threshold
-                                </label>
-                                <input
-                                    type="number"
-                                    {...register('lowStockThreshold', {
-                                        setValueAs: (v) => (v === '' ? undefined : Number(v)),
-                                    })}
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
-                                    placeholder="0"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Additional Options */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
-                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                            Additional Options
-                        </h2>
-
-                        <div className="flex items-center">
-                            <input
-                                type="checkbox"
-                                id="isFeatured"
-                                {...register('isFeatured')}
-                                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                            />
-                            <label htmlFor="isFeatured" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                                Featured Product
-                            </label>
                         </div>
                     </div>
 

@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -9,8 +12,10 @@ import {
     categoryService,
     type Category,
     type CategoryTree,
-    type CreateCategoryDto,
-    type UpdateCategoryDto,
+    createCategorySchema,
+    updateCategorySchema,
+    type CreateCategoryInput,
+    type UpdateCategoryInput,
 } from '@/services/categoryService';
 import { ApiError } from '@/lib/apiClient';
 
@@ -26,7 +31,7 @@ interface TreeNodeProps {
 
 const TreeNode: React.FC<TreeNodeProps> = ({ category, onEdit, onDelete, onMove, onAddChild }) => {
     const [isExpanded, setIsExpanded] = useState(true);
-    const hasChildren = category.children && category.children.length > 0;
+    const hasChildren = category.subCategories && category.subCategories.length > 0;
 
     return (
         <div className="ml-4">
@@ -53,9 +58,9 @@ const TreeNode: React.FC<TreeNodeProps> = ({ category, onEdit, onDelete, onMove,
                 <div className="flex-1 flex items-center gap-3">
                     <span className="font-medium text-gray-900 dark:text-white">{category.name}</span>
                     <span className="text-sm text-gray-500 dark:text-gray-400">({category.slug})</span>
-                    {!category.isActive && (
-                        <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-                            Inactive
+                    {category.productCount !== undefined && (
+                        <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400">
+                            {category.productCount} products
                         </span>
                     )}
                 </div>
@@ -80,7 +85,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ category, onEdit, onDelete, onMove,
             {/* Children */}
             {hasChildren && isExpanded && (
                 <div className="border-l-2 border-gray-200 dark:border-gray-700 ml-2">
-                    {category.children.map((child) => (
+                    {category.subCategories.map((child) => (
                         <TreeNode
                             key={child.id}
                             category={child}
@@ -97,185 +102,158 @@ const TreeNode: React.FC<TreeNodeProps> = ({ category, onEdit, onDelete, onMove,
 };
 
 export default function CategoriesPage() {
-    const [categories, setCategories] = useState<CategoryTree[]>([]);
-    const [allCategories, setAllCategories] = useState<Category[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const queryClient = useQueryClient();
     const [modalMode, setModalMode] = useState<ModalMode>(null);
     const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
     const [parentId, setParentId] = useState<number | null>(null);
-    const [formData, setFormData] = useState<CreateCategoryDto | UpdateCategoryDto>({
-        name: '',
-        description: '',
-        parentId: undefined,
-        imageUrl: '',
-        isActive: true,
-        displayOrder: 0,
+    const [error, setError] = useState<string | null>(null);
+
+    // React Hook Form setup
+    const {
+        register,
+        handleSubmit,
+        reset,
+        formState: { errors: formErrors },
+    } = useForm<CreateCategoryInput | UpdateCategoryInput>({
+        resolver: zodResolver(modalMode === 'edit' ? updateCategorySchema : createCategorySchema),
+        defaultValues: {
+            name: '',
+            description: '',
+            parentCategoryId: undefined,
+            order: 0,
+        },
     });
-    const [submitting, setSubmitting] = useState(false);
 
-    useEffect(() => {
-        loadCategories();
-    }, []);
+    // Queries
+    const { data: categoriesTreeData, isLoading } = useQuery({
+        queryKey: ['categories', 'tree'],
+        queryFn: () => categoryService.getTree(),
+    });
 
-    const loadCategories = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const [treeData, allData] = await Promise.all([
-                categoryService.getTree(),
-                categoryService.getAll({ size: 1000 }),
-            ]);
-            console.log('Categories tree data:', treeData);
-            console.log('All categories data:', allData);
-            setCategories(treeData || []);
-            // Backend array dönebilir veya PageResponse
-            if (Array.isArray(allData)) {
-                setAllCategories(allData);
-            } else {
-                setAllCategories(allData.content || []);
-            }
-        } catch (err) {
-            if (err instanceof ApiError) {
-                setError(`Error loading categories: ${err.message}`);
-            } else {
-                setError('Failed to load categories');
-            }
-            console.error('Error loading categories:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const { data: allCategoriesData } = useQuery({
+        queryKey: ['categories', 'all'],
+        queryFn: () => categoryService.getAll({ size: 1000 }),
+    });
+
+    // Handle different response formats from backend
+    const categoriesTree: CategoryTree[] = categoriesTreeData?.data || [];
+
+    // Handle both array and PageResponse formats
+    const allCategories: Category[] = Array.isArray(allCategoriesData)
+        ? allCategoriesData
+        : allCategoriesData?.content || [];
+
+    // Mutations
+    const createMutation = useMutation({
+        mutationFn: (data: CreateCategoryInput) => categoryService.create(data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['categories'] });
+            closeModal();
+        },
+        onError: (err: ApiError) => {
+            setError(`Error: ${err.message}`);
+        },
+    });
+
+    const updateMutation = useMutation({
+        mutationFn: ({ id, data }: { id: number; data: UpdateCategoryInput }) =>
+            categoryService.update(id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['categories'] });
+            closeModal();
+        },
+        onError: (err: ApiError) => {
+            setError(`Error: ${err.message}`);
+        },
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: (id: number) => categoryService.delete(id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['categories'] });
+            closeModal();
+        },
+        onError: (err: ApiError) => {
+            setError(`Error deleting category: ${err.message}`);
+        },
+    });
+
+    const moveMutation = useMutation({
+        mutationFn: ({ id, newParentId }: { id: number; newParentId: number | null }) =>
+            categoryService.move(id, newParentId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['categories'] });
+            closeModal();
+        },
+        onError: (err: ApiError) => {
+            setError(`Error moving category: ${err.message}`);
+        },
+    });
 
     const openAddModal = (parentCategoryId: number | null = null) => {
         setModalMode('add');
         setParentId(parentCategoryId);
-        setFormData({
+        setError(null);
+        reset({
             name: '',
             description: '',
-            parentId: parentCategoryId || undefined,
-            imageUrl: '',
-            isActive: true,
-            displayOrder: 0,
+            parentCategoryId: parentCategoryId || undefined,
+            order: 0,
         });
     };
 
     const openEditModal = (category: Category) => {
         setModalMode('edit');
         setSelectedCategory(category);
-        setFormData({
+        setError(null);
+        reset({
             name: category.name,
             description: category.description || '',
-            parentId: category.parentId || undefined,
-            imageUrl: category.imageUrl || '',
-            isActive: category.isActive,
-            displayOrder: category.displayOrder,
+            parentCategoryId: category.parentCategoryId || undefined,
+            order: category.order || 0,
         });
     };
 
     const openDeleteModal = (category: Category) => {
         setModalMode('delete');
         setSelectedCategory(category);
+        setError(null);
     };
 
     const openMoveModal = (category: Category) => {
         setModalMode('move');
         setSelectedCategory(category);
-        setParentId(category.parentId || null);
+        setParentId(category.parentCategoryId || null);
+        setError(null);
     };
 
     const closeModal = () => {
         setModalMode(null);
         setSelectedCategory(null);
         setParentId(null);
-        setFormData({
-            name: '',
-            description: '',
-            parentId: undefined,
-            imageUrl: '',
-            isActive: true,
-            displayOrder: 0,
-        });
         setError(null);
+        reset();
     };
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        const { name, value, type } = e.target;
-        const checked = (e.target as HTMLInputElement).checked;
-
-        setFormData((prev) => ({
-            ...prev,
-            [name]: type === 'checkbox' ? checked : type === 'number' ? Number(value) : value,
-        }));
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setSubmitting(true);
+    const onSubmit = (data: CreateCategoryInput | UpdateCategoryInput) => {
         setError(null);
-
-        try {
-            if (modalMode === 'add') {
-                await categoryService.create(formData as CreateCategoryDto);
-            } else if (modalMode === 'edit' && selectedCategory) {
-                await categoryService.update(selectedCategory.id, formData as UpdateCategoryDto);
-            }
-            await loadCategories();
-            closeModal();
-        } catch (err) {
-            if (err instanceof ApiError) {
-                setError(`Error: ${err.message}`);
-            } else {
-                setError('An error occurred');
-            }
-            console.error('Error submitting form:', err);
-        } finally {
-            setSubmitting(false);
+        if (modalMode === 'add') {
+            createMutation.mutate(data as CreateCategoryInput);
+        } else if (modalMode === 'edit' && selectedCategory) {
+            updateMutation.mutate({ id: selectedCategory.id, data: data as UpdateCategoryInput });
         }
     };
 
-    const handleDelete = async () => {
+    const handleDelete = () => {
         if (!selectedCategory) return;
-
-        setSubmitting(true);
         setError(null);
-
-        try {
-            await categoryService.delete(selectedCategory.id);
-            await loadCategories();
-            closeModal();
-        } catch (err) {
-            if (err instanceof ApiError) {
-                setError(`Error deleting category: ${err.message}`);
-            } else {
-                setError('Failed to delete category');
-            }
-            console.error('Error deleting category:', err);
-        } finally {
-            setSubmitting(false);
-        }
+        deleteMutation.mutate(selectedCategory.id);
     };
 
-    const handleMove = async () => {
+    const handleMove = () => {
         if (!selectedCategory) return;
-
-        setSubmitting(true);
         setError(null);
-
-        try {
-            await categoryService.move(selectedCategory.id, parentId);
-            await loadCategories();
-            closeModal();
-        } catch (err) {
-            if (err instanceof ApiError) {
-                setError(`Error moving category: ${err.message}`);
-            } else {
-                setError('Failed to move category');
-            }
-            console.error('Error moving category:', err);
-        } finally {
-            setSubmitting(false);
-        }
+        moveMutation.mutate({ id: selectedCategory.id, newParentId: parentId });
     };
 
     // Filter out the selected category and its descendants from parent selection
@@ -284,8 +262,8 @@ export default function CategoriesPage() {
 
         const isDescendant = (cat: Category, ancestorId: number): boolean => {
             if (cat.id === ancestorId) return true;
-            if (!cat.parentId) return false;
-            const parent = allCategories.find((c) => c.id === cat.parentId);
+            if (!cat.parentCategoryId) return false;
+            const parent = allCategories.find((c) => c.id === cat.parentCategoryId);
             return parent ? isDescendant(parent, ancestorId) : false;
         };
 
@@ -293,6 +271,12 @@ export default function CategoriesPage() {
             (cat) => cat.id !== selectedCategory.id && !isDescendant(cat, selectedCategory.id)
         );
     };
+
+    const isPending =
+        createMutation.isPending ||
+        updateMutation.isPending ||
+        deleteMutation.isPending ||
+        moveMutation.isPending;
 
     return (
         <>
@@ -321,17 +305,17 @@ export default function CategoriesPage() {
 
                 {/* Categories Tree */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">
-                    {loading ? (
+                    {isLoading ? (
                         <div className="p-8 text-center">
                             <p className="text-gray-500 dark:text-gray-400">Loading categories...</p>
                         </div>
-                    ) : categories.length === 0 ? (
+                    ) : categoriesTree.length === 0 ? (
                         <div className="p-8 text-center">
                             <p className="text-gray-500 dark:text-gray-400">No categories found</p>
                         </div>
                     ) : (
                         <div className="p-6">
-                            {categories.map((category) => (
+                            {categoriesTree.map((category) => (
                                 <TreeNode
                                     key={category.id}
                                     category={category}
@@ -352,72 +336,62 @@ export default function CategoriesPage() {
                 onClose={closeModal}
                 title={modalMode === 'add' ? 'Add New Category' : 'Edit Category'}
             >
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <Input
-                        label="Name"
-                        name="name"
-                        value={(formData as any).name}
-                        onChange={handleInputChange}
-                        required
-                        placeholder="Enter category name"
-                    />
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Name *
+                        </label>
+                        <input
+                            {...register('name')}
+                            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white ${formErrors.name ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                                }`}
+                            placeholder="Enter category name"
+                        />
+                        {formErrors.name && (
+                            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{formErrors.name.message}</p>
+                        )}
+                    </div>
 
-                    <Input
-                        label="Description"
-                        name="description"
-                        value={(formData as any).description}
-                        onChange={handleInputChange}
-                        placeholder="Enter category description"
-                    />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Description
+                        </label>
+                        <input
+                            {...register('description')}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                            placeholder="Enter category description"
+                        />
+                    </div>
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Parent Category
                         </label>
                         <select
-                            name="parentId"
-                            value={(formData as any).parentId || ''}
-                            onChange={handleInputChange}
+                            {...register('parentCategoryId', {
+                                setValueAs: (v) => (v === '' ? undefined : Number(v)),
+                            })}
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
                         >
                             <option value="">None (Root Category)</option>
                             {getAvailableParents().map((cat) => (
                                 <option key={cat.id} value={cat.id}>
-                                    {cat.path}
+                                    {cat.name}
                                 </option>
                             ))}
                         </select>
                     </div>
 
-                    <Input
-                        label="Image URL"
-                        name="imageUrl"
-                        value={(formData as any).imageUrl}
-                        onChange={handleInputChange}
-                        placeholder="https://example.com/image.png"
-                    />
-
-                    <Input
-                        label="Display Order"
-                        name="displayOrder"
-                        type="number"
-                        value={(formData as any).displayOrder}
-                        onChange={handleInputChange}
-                        placeholder="0"
-                    />
-
-                    <div className="flex items-center">
-                        <input
-                            type="checkbox"
-                            id="isActive"
-                            name="isActive"
-                            checked={(formData as any).isActive}
-                            onChange={handleInputChange}
-                            className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                        />
-                        <label htmlFor="isActive" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                            Active
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Order
                         </label>
+                        <input
+                            type="number"
+                            {...register('order', { valueAsNumber: true })}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                            placeholder="0"
+                        />
                     </div>
 
                     {error && (
@@ -427,11 +401,11 @@ export default function CategoriesPage() {
                     )}
 
                     <div className="flex gap-3 justify-end pt-4">
-                        <Button type="button" variant="ghost" onClick={closeModal} disabled={submitting}>
+                        <Button type="button" variant="ghost" onClick={closeModal} disabled={isPending}>
                             Cancel
                         </Button>
-                        <Button type="submit" variant="primary" disabled={submitting}>
-                            {submitting ? 'Saving...' : modalMode === 'add' ? 'Add Category' : 'Save Changes'}
+                        <Button type="submit" variant="primary" disabled={isPending}>
+                            {isPending ? 'Saving...' : modalMode === 'add' ? 'Add Category' : 'Save Changes'}
                         </Button>
                     </div>
                 </form>
@@ -456,7 +430,7 @@ export default function CategoriesPage() {
                             <option value="">None (Root Category)</option>
                             {getAvailableParents().map((cat) => (
                                 <option key={cat.id} value={cat.id}>
-                                    {cat.path}
+                                    {cat.name}
                                 </option>
                             ))}
                         </select>
@@ -469,11 +443,11 @@ export default function CategoriesPage() {
                     )}
 
                     <div className="flex gap-3 justify-end pt-4">
-                        <Button variant="ghost" onClick={closeModal} disabled={submitting}>
+                        <Button variant="ghost" onClick={closeModal} disabled={isPending}>
                             Cancel
                         </Button>
-                        <Button variant="primary" onClick={handleMove} disabled={submitting}>
-                            {submitting ? 'Moving...' : 'Move Category'}
+                        <Button variant="primary" onClick={handleMove} disabled={isPending}>
+                            {isPending ? 'Moving...' : 'Move Category'}
                         </Button>
                     </div>
                 </div>
@@ -494,11 +468,11 @@ export default function CategoriesPage() {
                     )}
 
                     <div className="flex gap-3 justify-end pt-4">
-                        <Button variant="ghost" onClick={closeModal} disabled={submitting}>
+                        <Button variant="ghost" onClick={closeModal} disabled={isPending}>
                             Cancel
                         </Button>
-                        <Button variant="danger" onClick={handleDelete} disabled={submitting}>
-                            {submitting ? 'Deleting...' : 'Delete Category'}
+                        <Button variant="danger" onClick={handleDelete} disabled={isPending}>
+                            {isPending ? 'Deleting...' : 'Delete Category'}
                         </Button>
                     </div>
                 </div>
