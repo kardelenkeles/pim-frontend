@@ -33,7 +33,7 @@ export default function ProductsPage() {
 
     // Filter and pagination state
     const [filters, setFilters] = useState<ProductFilter>({
-        search: '',
+        keyword: '',
         categoryId: undefined,
         brandId: undefined,
         status: undefined,
@@ -42,16 +42,16 @@ export default function ProductsPage() {
     });
     const [searchInput, setSearchInput] = useState('');
 
-    // TanStack Query - Products
+    // TanStack Query - Products (using search endpoint with filters)
     const { data: productsData, isLoading } = useQuery({
         queryKey: ['products', filters],
-        queryFn: () => productService.getAll(filters),
+        queryFn: () => productService.search(filters),
     });
 
     // TanStack Query - Brands
     const { data: brandsData } = useQuery({
-        queryKey: ['brands'],
-        queryFn: () => brandService.getAll({ size: 1000 }),
+        queryKey: ['brands', 'all'],
+        queryFn: () => brandService.getAllUnpaginated(),
     });
 
     // TanStack Query - Categories (Tree structure)
@@ -60,8 +60,8 @@ export default function ProductsPage() {
         queryFn: () => categoryService.getTree(),
     });
 
-    const products = productsData?.data || [];
-    const totalElements = productsData?.total || 0;
+    const products = productsData?.content || [];
+    const totalElements = productsData?.totalElements || 0;
     const totalPages = Math.ceil(totalElements / (filters.size || 10));
     const brands = brandsData?.data || [];
     const categoriesTree = categoriesTreeData?.data || [];
@@ -89,7 +89,6 @@ export default function ProductsPage() {
             brandId: undefined,
             title: '',
             description: '',
-            quality: '',
             attributes: {},
             images: []
         }
@@ -150,7 +149,7 @@ export default function ProductsPage() {
     const handleSearch = () => {
         setFilters((prev) => ({
             ...prev,
-            search: searchInput || undefined,
+            keyword: searchInput || undefined,
             page: 0,
         }));
     };
@@ -166,7 +165,7 @@ export default function ProductsPage() {
     const clearFilters = () => {
         setSearchInput('');
         setFilters({
-            search: '',
+            keyword: '',
             categoryId: undefined,
             brandId: undefined,
             status: undefined,
@@ -183,7 +182,6 @@ export default function ProductsPage() {
             brandId: undefined,
             title: '',
             description: '',
-            quality: '',
             attributes: {},
             images: []
         });
@@ -199,7 +197,6 @@ export default function ProductsPage() {
             title: product.title,
             description: product.description || '',
             status: product.status,
-            quality: product.quality || '',
             attributes: product.attributes || {},
             images: product.images || []
         });
@@ -256,7 +253,7 @@ export default function ProductsPage() {
             header: 'Status',
             render: (product: Product) => (
                 <span
-                    className={`px-2 py-1 text-xs rounded-full ${product.status === 'PUBLISHED'
+                    className={`px-2 py-1 text-xs rounded-full ${product.status === 'ACTIVE'
                         ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
                         : product.status === 'DRAFT'
                             ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
@@ -266,6 +263,19 @@ export default function ProductsPage() {
                     {product.status}
                 </span>
             ),
+        },
+        {
+            key: 'quality',
+            header: 'Quality Score',
+            render: (product: Product) => {
+                const score = product.quality?.score || 0;
+                const color = score >= 80 ? 'text-green-600' : score >= 50 ? 'text-yellow-600' : 'text-red-600';
+                return (
+                    <span className={`font-semibold ${color}`}>
+                        {score}%
+                    </span>
+                );
+            },
         },
         {
             key: 'createdAt',
@@ -442,7 +452,7 @@ export default function ProductsPage() {
                         {/* Title */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Title *
+                                Title
                             </label>
                             <input
                                 {...(modalMode === 'add' ? createForm.register('title') : updateForm.register('title'))}
@@ -478,7 +488,7 @@ export default function ProductsPage() {
                         {/* Category */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Category *
+                                Category
                             </label>
                             <select
                                 {...(modalMode === 'add' ? createForm.register('categoryId', { valueAsNumber: true }) : updateForm.register('categoryId', { valueAsNumber: true }))}
@@ -527,22 +537,11 @@ export default function ProductsPage() {
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
                             >
                                 <option value="DRAFT">Draft</option>
-                                <option value="PUBLISHED">Published</option>
+                                <option value="ACTIVE">Active</option>
                                 <option value="ARCHIVED">Archived</option>
                             </select>
                         </div>
 
-                        {/* Quality */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Quality
-                            </label>
-                            <input
-                                {...(modalMode === 'add' ? createForm.register('quality') : updateForm.register('quality'))}
-                                placeholder="Enter quality"
-                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
-                            />
-                        </div>
                     </div>
 
                     {/* Description */}
