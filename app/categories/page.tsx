@@ -597,16 +597,31 @@ export default function CategoriesPage() {
                                     <Table
                                         data={paginatedCategoriesData.content}
                                         columns={[
-                                            { key: 'name', header: 'Name' },
-                                            { key: 'slug', header: 'Slug' },
                                             {
-                                                key: 'parentCategoryId',
-                                                header: 'Parent',
+                                                key: 'name',
+                                                header: 'Name',
                                                 render: (cat: Category) => {
                                                     const parent = allCategories.find(c => c.id === cat.parentCategoryId);
-                                                    return parent ? parent.name : '-';
+                                                    return (
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="font-medium text-gray-900 dark:text-white">{cat.name}</span>
+                                                            {parent ? (
+                                                                <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                                                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                                                    </svg>
+                                                                    Sub of: <span className="font-medium text-blue-600 dark:text-blue-400">{parent.name}</span>
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 w-fit">
+                                                                    Root
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    );
                                                 }
                                             },
+                                            { key: 'slug', header: 'Slug' },
                                             {
                                                 key: 'productCount',
                                                 header: 'Products',
