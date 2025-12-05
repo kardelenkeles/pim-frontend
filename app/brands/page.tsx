@@ -1,91 +1,80 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Table } from '@/components/ui/Table';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
-import { brandService, type Brand, type CreateBrandDto, type UpdateBrandDto } from '@/services/brandService';
+import { brandService, type Brand, type CreateBrandInput, type UpdateBrandInput, createBrandSchema, updateBrandSchema } from '@/services/brandService';
 import { ApiError } from '@/lib/apiClient';
 
 type ModalMode = 'add' | 'edit' | 'delete' | null;
 
 export default function BrandsPage() {
-    const [brands, setBrands] = useState<Brand[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const queryClient = useQueryClient();
     const [modalMode, setModalMode] = useState<ModalMode>(null);
     const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
-    const [formData, setFormData] = useState<CreateBrandDto | UpdateBrandDto>({
-        name: '',
-        description: '',
-        logoUrl: '',
-        website: '',
-        isActive: true,
-    });
-    const [submitting, setSubmitting] = useState(false);
-
-    // Pagination state
     const [currentPage, setCurrentPage] = useState(0);
-    const [totalPages, setTotalPages] = useState(0);
-    const [totalElements, setTotalElements] = useState(0);
 
-    useEffect(() => {
-        loadBrands();
-    }, [currentPage]);
+    // Fetch brands with TanStack Query
+    const { data: brandsData, isLoading, error } = useQuery({
+        queryKey: ['brands', currentPage],
+        queryFn: () => brandService.getAll({ page: currentPage, size: 10 }),
+    });
 
-    const loadBrands = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const response = await brandService.getAll({ page: currentPage, size: 10 });
-            console.log('Backend response:', response);
-            // Backend direkt array döndürüyor, PageResponse değil
-            if (Array.isArray(response)) {
-                setBrands(response);
-                setTotalPages(1);
-                setTotalElements(response.length);
-            } else {
-                // Eğer PageResponse formatında geliyorsa
-                setBrands(response.content || []);
-                setTotalPages(response.totalPages || 1);
-                setTotalElements(response.totalElements || 0);
-            }
-        } catch (err) {
-            if (err instanceof ApiError) {
-                setError(`Error loading brands: ${err.message}`);
-            } else {
-                setError('Failed to load brands');
-            }
-            setBrands([]);
-            console.error('Error loading brands:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
+    // React Hook Form for Add
+    const addForm = useForm<CreateBrandInput>({
+        resolver: zodResolver(createBrandSchema),
+        defaultValues: { name: '' },
+    });
+
+    // React Hook Form for Edit
+    const editForm = useForm<UpdateBrandInput>({
+        resolver: zodResolver(updateBrandSchema),
+        defaultValues: { name: '' },
+    });
+
+    // Create mutation
+    const createMutation = useMutation({
+        mutationFn: (data: CreateBrandInput) => brandService.create(data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['brands'] });
+            closeModal();
+        },
+    });
+
+    // Update mutation
+    const updateMutation = useMutation({
+        mutationFn: ({ id, data }: { id: number; data: UpdateBrandInput }) =>
+            brandService.update(id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['brands'] });
+            closeModal();
+        },
+    });
+
+    // Delete mutation
+    const deleteMutation = useMutation({
+        mutationFn: (id: number) => brandService.delete(id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['brands'] });
+            closeModal();
+        },
+    });
 
     const openAddModal = () => {
         setModalMode('add');
-        setFormData({
-            name: '',
-            description: '',
-            logoUrl: '',
-            website: '',
-            isActive: true,
-        });
+        addForm.reset({ name: '' });
     };
 
     const openEditModal = (brand: Brand) => {
         setModalMode('edit');
         setSelectedBrand(brand);
-        setFormData({
-            name: brand.name,
-            description: brand.description || '',
-            logoUrl: brand.logoUrl || '',
-            website: brand.website || '',
-            isActive: brand.isActive,
-        });
+        editForm.reset({ name: brand.name });
     };
 
     const openDeleteModal = (brand: Brand) => {
@@ -96,91 +85,42 @@ export default function BrandsPage() {
     const closeModal = () => {
         setModalMode(null);
         setSelectedBrand(null);
-        setFormData({
-            name: '',
-            description: '',
-            logoUrl: '',
-            website: '',
-            isActive: true,
-        });
+        addForm.reset();
+        editForm.reset();
     };
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value, type, checked } = e.target;
-        setFormData((prev) => ({
-            ...prev,
-            [name]: type === 'checkbox' ? checked : value,
-        }));
-    };
+    const handleAddSubmit = addForm.handleSubmit((data) => {
+        createMutation.mutate(data);
+    });
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setSubmitting(true);
-        setError(null);
+    const handleEditSubmit = editForm.handleSubmit((data) => {
+        if (selectedBrand) {
+            updateMutation.mutate({ id: selectedBrand.id, data });
+        }
+    });
 
-        try {
-            if (modalMode === 'add') {
-                await brandService.create(formData as CreateBrandDto);
-            } else if (modalMode === 'edit' && selectedBrand) {
-                await brandService.update(selectedBrand.id, formData as UpdateBrandDto);
-            }
-            await loadBrands();
-            closeModal();
-        } catch (err) {
-            if (err instanceof ApiError) {
-                setError(`Error: ${err.message}`);
-            } else {
-                setError('An error occurred');
-            }
-            console.error('Error submitting form:', err);
-        } finally {
-            setSubmitting(false);
+    const handleDelete = () => {
+        if (selectedBrand) {
+            deleteMutation.mutate(selectedBrand.id);
         }
     };
 
-    const handleDelete = async () => {
-        if (!selectedBrand) return;
-
-        setSubmitting(true);
-        setError(null);
-
-        try {
-            await brandService.delete(selectedBrand.id);
-            await loadBrands();
-            closeModal();
-        } catch (err) {
-            if (err instanceof ApiError) {
-                setError(`Error deleting brand: ${err.message}`);
-            } else {
-                setError('Failed to delete brand');
-            }
-            console.error('Error deleting brand:', err);
-        } finally {
-            setSubmitting(false);
-        }
-    };
+    const brands = brandsData?.data || [];
+    const totalElements = brandsData?.total || 0;
+    const totalPages = Math.ceil(totalElements / 10);
 
     const columns = [
         { key: 'name', header: 'Name' },
         { key: 'slug', header: 'Slug' },
         {
+            key: 'productCount',
+            header: 'Products',
+            render: (brand: Brand) => brand.productCount || 0,
+        },
+        {
             key: 'createdAt',
             header: 'Created At',
             render: (brand: Brand) => new Date(brand.createdAt).toLocaleDateString(),
-        },
-        {
-            key: 'isActive',
-            header: 'Status',
-            render: (brand: Brand) => (
-                <span
-                    className={`px-2 py-1 text-xs rounded-full ${brand.isActive
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                        : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
-                        }`}
-                >
-                    {brand.isActive ? 'Active' : 'Inactive'}
-                </span>
-            ),
         },
         {
             key: 'actions',
@@ -219,13 +159,15 @@ export default function BrandsPage() {
                 {/* Error Message */}
                 {error && (
                     <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                        <p className="text-red-800 dark:text-red-300">{error}</p>
+                        <p className="text-red-800 dark:text-red-300">
+                            {error instanceof ApiError ? error.message : 'An error occurred'}
+                        </p>
                     </div>
                 )}
 
                 {/* Brands Table */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">
-                    {loading ? (
+                    {isLoading ? (
                         <div className="p-8 text-center">
                             <p className="text-gray-500 dark:text-gray-400">Loading brands...</p>
                         </div>
@@ -274,66 +216,56 @@ export default function BrandsPage() {
                 onClose={closeModal}
                 title={modalMode === 'add' ? 'Add New Brand' : 'Edit Brand'}
             >
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <Input
-                        label="Name"
-                        name="name"
-                        value={(formData as any).name}
-                        onChange={handleInputChange}
-                        required
-                        placeholder="Enter brand name"
-                    />
-
-                    <Input
-                        label="Description"
-                        name="description"
-                        value={(formData as any).description}
-                        onChange={handleInputChange}
-                        placeholder="Enter brand description"
-                    />
-
-                    <Input
-                        label="Logo URL"
-                        name="logoUrl"
-                        value={(formData as any).logoUrl}
-                        onChange={handleInputChange}
-                        placeholder="https://example.com/logo.png"
-                    />
-
-                    <Input
-                        label="Website"
-                        name="website"
-                        value={(formData as any).website}
-                        onChange={handleInputChange}
-                        placeholder="https://example.com"
-                    />
-
-                    <div className="flex items-center">
-                        <input
-                            type="checkbox"
-                            id="isActive"
-                            name="isActive"
-                            checked={(formData as any).isActive}
-                            onChange={handleInputChange}
-                            className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                <form onSubmit={modalMode === 'add' ? handleAddSubmit : handleEditSubmit} className="space-y-4">
+                    <div>
+                        <Input
+                            label="Name"
+                            {...(modalMode === 'add' ? addForm.register('name') : editForm.register('name'))}
+                            placeholder="Enter brand name"
                         />
-                        <label htmlFor="isActive" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                            Active
-                        </label>
+                        {modalMode === 'add' && addForm.formState.errors.name && (
+                            <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                                {addForm.formState.errors.name.message}
+                            </p>
+                        )}
+                        {modalMode === 'edit' && editForm.formState.errors.name && (
+                            <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                                {editForm.formState.errors.name.message}
+                            </p>
+                        )}
                     </div>
 
-                    {error && (
+                    {(createMutation.error || updateMutation.error) && (
                         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                            <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+                            <p className="text-sm text-red-800 dark:text-red-300">
+                                {createMutation.error instanceof ApiError
+                                    ? createMutation.error.message
+                                    : updateMutation.error instanceof ApiError
+                                        ? updateMutation.error.message
+                                        : 'An error occurred'}
+                            </p>
                         </div>
                     )}
 
                     <div className="flex gap-3 justify-end pt-4">
-                        <Button type="button" variant="ghost" onClick={closeModal} disabled={submitting}>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={closeModal}
+                            disabled={createMutation.isPending || updateMutation.isPending}
+                        >
                             Cancel
                         </Button>
-                        <Button type="submit" variant="primary" disabled={submitting}>
-                            {submitting ? 'Saving...' : modalMode === 'add' ? 'Add Brand' : 'Save Changes'}
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            disabled={createMutation.isPending || updateMutation.isPending}
+                        >
+                            {createMutation.isPending || updateMutation.isPending
+                                ? 'Saving...'
+                                : modalMode === 'add'
+                                    ? 'Add Brand'
+                                    : 'Save Changes'}
                         </Button>
                     </div>
                 </form>
@@ -347,18 +279,22 @@ export default function BrandsPage() {
                         cannot be undone.
                     </p>
 
-                    {error && (
+                    {deleteMutation.error && (
                         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                            <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+                            <p className="text-sm text-red-800 dark:text-red-300">
+                                {deleteMutation.error instanceof ApiError
+                                    ? deleteMutation.error.message
+                                    : 'Failed to delete brand'}
+                            </p>
                         </div>
                     )}
 
                     <div className="flex gap-3 justify-end pt-4">
-                        <Button variant="ghost" onClick={closeModal} disabled={submitting}>
+                        <Button variant="ghost" onClick={closeModal} disabled={deleteMutation.isPending}>
                             Cancel
                         </Button>
-                        <Button variant="danger" onClick={handleDelete} disabled={submitting}>
-                            {submitting ? 'Deleting...' : 'Delete Brand'}
+                        <Button variant="danger" onClick={handleDelete} disabled={deleteMutation.isPending}>
+                            {deleteMutation.isPending ? 'Deleting...' : 'Delete Brand'}
                         </Button>
                     </div>
                 </div>
