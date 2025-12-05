@@ -46,8 +46,8 @@ class CategoryService {
     /**
      * Get all categories with pagination
      */
-    async getAll(params?: PageRequest): Promise<PageResponse<Category>> {
-        return apiClient.get<PageResponse<Category>>(this.endpoint, { params });
+    async getAll(params?: PageRequest): Promise<PageResponse<Category> | Category[]> {
+        return apiClient.get<PageResponse<Category> | Category[]>(this.endpoint, { params });
     }
 
     /**

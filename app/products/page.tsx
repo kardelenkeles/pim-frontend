@@ -86,6 +86,7 @@ export default function ProductsPage() {
             setLoading(true);
             setError(null);
             const response = await productService.getAll(filters);
+            console.log('Loaded products response:', response);
             setProducts(response.content);
             setTotalPages(response.totalPages);
             setTotalElements(response.totalElements);
@@ -287,7 +288,7 @@ export default function ProductsPage() {
             ),
         },
     ];
-
+    console.log('Rendering ProductsPage with products:', products);
     return (
         <>
             <Breadcrumb items={[{ label: 'Dashboard', href: '/' }, { label: 'Products' }]} />
@@ -354,7 +355,7 @@ export default function ProductsPage() {
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
                             >
                                 <option value="">All Categories</option>
-                                {categories.map((cat) => (
+                                {categories?.map((cat) => (
                                     <option key={cat.id} value={cat.id}>
                                         {cat.name}
                                     </option>
@@ -373,7 +374,7 @@ export default function ProductsPage() {
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
                             >
                                 <option value="">All Brands</option>
-                                {brands.map((brand) => (
+                                {brands?.map((brand) => (
                                     <option key={brand.id} value={brand.id}>
                                         {brand.name}
                                     </option>
@@ -396,7 +397,7 @@ export default function ProductsPage() {
                         <div className="p-8 text-center">
                             <p className="text-gray-500 dark:text-gray-400">Loading products...</p>
                         </div>
-                    ) : products.length === 0 ? (
+                    ) : products?.length === 0 ? (
                         <div className="p-8 text-center">
                             <p className="text-gray-500 dark:text-gray-400">No products found</p>
                         </div>
@@ -482,7 +483,7 @@ export default function ProductsPage() {
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
                             >
                                 <option value="">Select Category</option>
-                                {categories.map((cat) => (
+                                {categories?.map((cat) => (
                                     <option key={cat.id} value={cat.id}>
                                         {cat.name}
                                     </option>
@@ -501,7 +502,7 @@ export default function ProductsPage() {
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
                             >
                                 <option value="">No Brand</option>
-                                {brands.map((brand) => (
+                                {brands?.map((brand) => (
                                     <option key={brand.id} value={brand.id}>
                                         {brand.name}
                                     </option>

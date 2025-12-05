@@ -40,15 +40,25 @@ export default function BrandsPage() {
             setLoading(true);
             setError(null);
             const response = await brandService.getAll({ page: currentPage, size: 10 });
-            setBrands(response.content);
-            setTotalPages(response.totalPages);
-            setTotalElements(response.totalElements);
+            console.log('Backend response:', response);
+            // Backend direkt array döndürüyor, PageResponse değil
+            if (Array.isArray(response)) {
+                setBrands(response);
+                setTotalPages(1);
+                setTotalElements(response.length);
+            } else {
+                // Eğer PageResponse formatında geliyorsa
+                setBrands(response.content || []);
+                setTotalPages(response.totalPages || 1);
+                setTotalElements(response.totalElements || 0);
+            }
         } catch (err) {
             if (err instanceof ApiError) {
                 setError(`Error loading brands: ${err.message}`);
             } else {
                 setError('Failed to load brands');
             }
+            setBrands([]);
             console.error('Error loading brands:', err);
         } finally {
             setLoading(false);
@@ -164,8 +174,8 @@ export default function BrandsPage() {
             render: (brand: Brand) => (
                 <span
                     className={`px-2 py-1 text-xs rounded-full ${brand.isActive
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                            : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                        : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
                         }`}
                 >
                     {brand.isActive ? 'Active' : 'Inactive'}

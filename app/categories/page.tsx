@@ -126,8 +126,15 @@ export default function CategoriesPage() {
                 categoryService.getTree(),
                 categoryService.getAll({ size: 1000 }),
             ]);
-            setCategories(treeData);
-            setAllCategories(allData.content);
+            console.log('Categories tree data:', treeData);
+            console.log('All categories data:', allData);
+            setCategories(treeData || []);
+            // Backend array dönebilir veya PageResponse
+            if (Array.isArray(allData)) {
+                setAllCategories(allData);
+            } else {
+                setAllCategories(allData.content || []);
+            }
         } catch (err) {
             if (err instanceof ApiError) {
                 setError(`Error loading categories: ${err.message}`);
