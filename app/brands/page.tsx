@@ -19,11 +19,18 @@ export default function BrandsPage() {
     const [modalMode, setModalMode] = useState<ModalMode>(null);
     const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
     const [currentPage, setCurrentPage] = useState(0);
+    const [pageSize, setPageSize] = useState(10);
+    const [sortBy, setSortBy] = useState('createdAt');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+    const [searchKeyword, setSearchKeyword] = useState('');
+    const [searchInput, setSearchInput] = useState('');
 
     // Fetch brands with TanStack Query
     const { data: brandsData, isLoading, error } = useQuery({
-        queryKey: ['brands', currentPage],
-        queryFn: () => brandService.getAll({ page: currentPage, size: 10, paginated: true }),
+        queryKey: ['brands', currentPage, pageSize, sortBy, sortDirection, searchKeyword],
+        queryFn: () => searchKeyword
+            ? brandService.search(searchKeyword, { page: currentPage, size: pageSize, sortBy, sortDirection })
+            : brandService.getAll({ page: currentPage, size: pageSize, sortBy, sortDirection, paginated: true }),
     });
 
     // React Hook Form for Add
@@ -105,9 +112,20 @@ export default function BrandsPage() {
         }
     };
 
-    const brands = brandsData?.data || [];
-    const totalElements = brandsData?.total || 0;
-    const totalPages = Math.ceil(totalElements / 10);
+    const handleSearch = () => {
+        setSearchKeyword(searchInput);
+        setCurrentPage(0);
+    };
+
+    const clearSearch = () => {
+        setSearchInput('');
+        setSearchKeyword('');
+        setCurrentPage(0);
+    };
+
+    const brands = brandsData?.content || [];
+    const totalElements = brandsData?.totalElements || 0;
+    const totalPages = Math.ceil(totalElements / pageSize);
 
     const columns = [
         { key: 'name', header: 'Name' },
@@ -164,6 +182,70 @@ export default function BrandsPage() {
                         </p>
                     </div>
                 )}
+
+                {/* Search and Sort Bar */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        {/* Search */}
+                        <div className="lg:col-span-2">
+                            <div className="flex gap-2">
+                                <Input
+                                    placeholder="Search brands..."
+                                    value={searchInput}
+                                    onChange={(e) => setSearchInput(e.target.value)}
+                                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                                />
+                                <Button variant="primary" onClick={handleSearch}>
+                                    Search
+                                </Button>
+                                {searchKeyword && (
+                                    <Button variant="ghost" onClick={clearSearch}>
+                                        Clear
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Sort By */}
+                        <div>
+                            <select
+                                value={sortBy}
+                                onChange={(e) => { setSortBy(e.target.value); setCurrentPage(0); }}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                            >
+                                <option value="createdAt">Created Date</option>
+                                <option value="updatedAt">Updated Date</option>
+                                <option value="name">Name</option>
+                            </select>
+                        </div>
+
+                        {/* Sort Direction */}
+                        <div>
+                            <select
+                                value={sortDirection}
+                                onChange={(e) => { setSortDirection(e.target.value as 'asc' | 'desc'); setCurrentPage(0); }}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                            >
+                                <option value="asc">Ascending</option>
+                                <option value="desc">Descending</option>
+                            </select>
+                        </div>
+
+                        {/* Page Size */}
+                        <div>
+                            <select
+                                value={pageSize}
+                                onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(0); }}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                            >
+                                <option value="10">10 per page</option>
+                                <option value="25">25 per page</option>
+                                <option value="50">50 per page</option>
+                                <option value="100">100 per page</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
 
                 {/* Brands Table */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">

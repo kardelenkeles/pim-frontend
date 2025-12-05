@@ -42,9 +42,20 @@ class BrandService {
     /**
      * Get all brands with pagination
      */
-    async getAll(params?: { page?: number; size?: number; paginated?: boolean }): Promise<PageResponse<Brand>> {
+    async getAll(params?: { page?: number; size?: number; paginated?: boolean; sortBy?: string; sortDirection?: string }): Promise<PageResponse<Brand>> {
+        const backendParams: any = {
+            paginated: true,
+            page: params?.page,
+            size: params?.size,
+        };
+
+        // Sort parametresini field,direction formatında ekle
+        if (params?.sortBy && params?.sortDirection) {
+            backendParams.sort = `${params.sortBy},${params.sortDirection}`;
+        }
+
         return apiClient.get<PageResponse<Brand>>(this.endpoint, {
-            params: { paginated: true, ...params }
+            params: backendParams
         });
     }
 
@@ -95,9 +106,20 @@ class BrandService {
     /**
      * Search brands by keyword
      */
-    async search(keyword: string, params?: { page?: number; size?: number }): Promise<PageResponse<Brand>> {
+    async search(keyword: string, params?: { page?: number; size?: number; sortBy?: string; sortDirection?: string }): Promise<PageResponse<Brand>> {
+        const backendParams: any = {
+            keyword,
+            page: params?.page,
+            size: params?.size,
+        };
+
+        // Sort parametresini field,direction formatında ekle
+        if (params?.sortBy && params?.sortDirection) {
+            backendParams.sort = `${params.sortBy},${params.sortDirection}`;
+        }
+
         return apiClient.get<PageResponse<Brand>>(`${this.endpoint}/search`, {
-            params: { keyword, ...params },
+            params: backendParams,
         });
     }
 }
