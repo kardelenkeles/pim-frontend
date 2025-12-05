@@ -23,7 +23,7 @@ export default function BrandsPage() {
     // Fetch brands with TanStack Query
     const { data: brandsData, isLoading, error } = useQuery({
         queryKey: ['brands', currentPage],
-        queryFn: () => brandService.getAll({ page: currentPage, size: 10 }),
+        queryFn: () => brandService.getAll({ page: currentPage, size: 10, paginated: true }),
     });
 
     // React Hook Form for Add
