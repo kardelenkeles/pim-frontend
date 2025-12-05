@@ -165,6 +165,7 @@ export default function CategoriesPage() {
     const [parentId, setParentId] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [activeId, setActiveId] = useState<string | null>(null);
+    const [deleteAction, setDeleteAction] = useState<'cascade' | 'reassign'>('cascade');
 
     // View mode: 'tree' or 'list'
     const [viewMode, setViewMode] = useState<'tree' | 'list'>('tree');
@@ -253,7 +254,8 @@ export default function CategoriesPage() {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: (id: number) => categoryService.delete(id),
+        mutationFn: ({ id, action }: { id: number; action: 'cascade' | 'reassign' }) => 
+            categoryService.delete(id, action),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['categories'] });
             closeModal();
@@ -303,6 +305,7 @@ export default function CategoriesPage() {
         setModalMode('delete');
         setSelectedCategory(category);
         setError(null);
+        setDeleteAction('cascade');
     };
 
     const openMoveModal = (category: Category) => {
@@ -332,7 +335,7 @@ export default function CategoriesPage() {
     const handleDelete = () => {
         if (!selectedCategory) return;
         setError(null);
-        deleteMutation.mutate(selectedCategory.id);
+        deleteMutation.mutate({ id: selectedCategory.id, action: deleteAction });
     };
 
     const handleMove = () => {
@@ -812,9 +815,71 @@ export default function CategoriesPage() {
             <Modal isOpen={modalMode === 'delete'} onClose={closeModal} title="Delete Category">
                 <div className="space-y-4">
                     <p className="text-gray-600 dark:text-gray-400">
-                        Are you sure you want to delete <strong>{selectedCategory?.name}</strong>? This action
-                        cannot be undone.
+                        Are you sure you want to delete <strong>{selectedCategory?.name}</strong>?
                     </p>
+
+                    {/* Check if category has subcategories */}
+                    {(() => {
+                        const hasSubcategories = allCategories.some(cat => cat.parentCategoryId === selectedCategory?.id);
+                        if (hasSubcategories) {
+                            const subcategoryCount = allCategories.filter(cat => cat.parentCategoryId === selectedCategory?.id).length;
+                            return (
+                                <div className="space-y-3">
+                                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                                        <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                                            ⚠️ This category has <strong>{subcategoryCount} subcategory(ies)</strong>.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            What should happen to the subcategories?
+                                        </p>
+                                        <div className="space-y-2">
+                                            <label className="flex items-start gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                                <input
+                                                    type="radio"
+                                                    name="deleteAction"
+                                                    value="cascade"
+                                                    checked={deleteAction === 'cascade'}
+                                                    onChange={(e) => setDeleteAction(e.target.value as 'cascade')}
+                                                    className="mt-1"
+                                                />
+                                                <div>
+                                                    <div className="font-medium text-gray-900 dark:text-white">
+                                                        Delete all subcategories
+                                                    </div>
+                                                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                                                        All subcategories will be permanently deleted
+                                                    </div>
+                                                </div>
+                                            </label>
+
+                                            <label className="flex items-start gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                                <input
+                                                    type="radio"
+                                                    name="deleteAction"
+                                                    value="reassign"
+                                                    checked={deleteAction === 'reassign'}
+                                                    onChange={(e) => setDeleteAction(e.target.value as 'reassign')}
+                                                    className="mt-1"
+                                                />
+                                                <div>
+                                                    <div className="font-medium text-gray-900 dark:text-white">
+                                                        Move subcategories up one level
+                                                    </div>
+                                                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                                                        Subcategories will be moved to {selectedCategory?.parentCategoryId ? 'the parent category' : 'root level'}
+                                                    </div>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
 
                     {error && (
                         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
