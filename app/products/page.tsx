@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -62,7 +63,7 @@ export default function ProductsPage() {
     const products = productsData?.data || [];
     const totalElements = productsData?.total || 0;
     const totalPages = Math.ceil(totalElements / (filters.size || 10));
-    const brands = Array.isArray(brandsData) ? brandsData : brandsData?.content || [];
+    const brands = brandsData?.data || [];
     const categories = Array.isArray(categoriesData) ? categoriesData : categoriesData?.content || [];
 
     // React Hook Form
@@ -221,7 +222,18 @@ export default function ProductsPage() {
     };
 
     const columns = [
-        { key: 'title', header: 'Title' },
+        {
+            key: 'title',
+            header: 'Title',
+            render: (product: Product) => (
+                <Link
+                    href={`/products/${product.id}`}
+                    className="text-primary hover:underline font-medium"
+                >
+                    {product.title}
+                </Link>
+            ),
+        },
         { key: 'barcode', header: 'Barcode' },
         { key: 'categoryName', header: 'Category' },
         { key: 'brandName', header: 'Brand' },
@@ -251,6 +263,11 @@ export default function ProductsPage() {
             header: 'Actions',
             render: (product: Product) => (
                 <div className="flex gap-2">
+                    <Link href={`/products/${product.id}`}>
+                        <Button variant="ghost" size="sm">
+                            View
+                        </Button>
+                    </Link>
                     <Button variant="ghost" size="sm" onClick={() => openEditModal(product)}>
                         Edit
                     </Button>
@@ -261,7 +278,7 @@ export default function ProductsPage() {
             ),
         },
     ];
-    console.log('Rendering ProductsPage with products:', products);
+
     return (
         <>
             <Breadcrumb items={[{ label: 'Dashboard', href: '/' }, { label: 'Products' }]} />

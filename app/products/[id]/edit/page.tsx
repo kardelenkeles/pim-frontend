@@ -156,7 +156,7 @@ export default function ProductEditPage() {
                 brandService.getAll({ size: 1000 }),
                 categoryService.getTree(),
             ]);
-            setBrands(brandsData.content);
+            setBrands(brandsData.data);
             setCategories(categoriesData.data);
 
             if (isEdit && productId) {
@@ -176,7 +176,6 @@ export default function ProductEditPage() {
             } else {
                 setError('Failed to load data');
             }
-            console.error('Error loading data:', err);
         } finally {
             setLoading(false);
         }
@@ -199,7 +198,6 @@ export default function ProductEditPage() {
             } else {
                 setError('An error occurred while saving');
             }
-            console.error('Error saving product:', err);
         } finally {
             setSubmitting(false);
         }

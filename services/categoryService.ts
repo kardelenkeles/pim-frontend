@@ -53,7 +53,10 @@ export interface CategoryTree extends Category {
 
 export interface CategoryTreeResponse {
     data: CategoryTree[];
-    total: number;
+}
+
+export interface ApiResponse<T> {
+    data: T[];
 }
 
 class CategoryService {
@@ -62,8 +65,19 @@ class CategoryService {
     /**
      * Get all categories with pagination
      */
-    async getAll(params?: PageRequest): Promise<PageResponse<Category> | Category[]> {
-        return apiClient.get<PageResponse<Category> | Category[]>(this.endpoint, { params });
+    async getAll(params?: PageRequest & { paginated?: boolean }): Promise<PageResponse<Category>> {
+        return apiClient.get<PageResponse<Category>>(this.endpoint, {
+            params: { paginated: true, ...params }
+        });
+    }
+
+    /**
+     * Get all categories without pagination
+     */
+    async getAllUnpaginated(): Promise<ApiResponse<Category>> {
+        return apiClient.get<ApiResponse<Category>>(this.endpoint, {
+            params: { paginated: false }
+        });
     }
 
     /**
@@ -83,22 +97,22 @@ class CategoryService {
     /**
      * Get category tree
      */
-    async getTree(): Promise<CategoryTreeResponse> {
-        return apiClient.get<CategoryTreeResponse>(`${this.endpoint}/tree`);
+    async getTree(): Promise<ApiResponse<CategoryTree>> {
+        return apiClient.get<ApiResponse<CategoryTree>>(`${this.endpoint}/tree`);
     }
 
     /**
      * Get root categories (no parent)
      */
-    async getRoots(params?: PageRequest): Promise<PageResponse<Category>> {
-        return apiClient.get<PageResponse<Category>>(`${this.endpoint}/roots`, { params });
+    async getRoots(): Promise<ApiResponse<Category>> {
+        return apiClient.get<ApiResponse<Category>>(`${this.endpoint}/root`);
     }
 
     /**
      * Get children of a category
      */
-    async getChildren(id: number, params?: PageRequest): Promise<PageResponse<Category>> {
-        return apiClient.get<PageResponse<Category>>(`${this.endpoint}/${id}/children`, { params });
+    async getChildren(id: number): Promise<ApiResponse<Category>> {
+        return apiClient.get<ApiResponse<Category>>(`${this.endpoint}/${id}/subcategories`);
     }
 
     /**
@@ -123,28 +137,20 @@ class CategoryService {
     }
 
     /**
-     * Search categories by name
+     * Move category to different parent
      */
-    async search(query: string, params?: PageRequest): Promise<PageResponse<Category>> {
-        return apiClient.get<PageResponse<Category>>(`${this.endpoint}/search`, {
-            params: { q: query, ...params },
+    async move(id: number, newParentId: number | null): Promise<void> {
+        return apiClient.patch<void>(`${this.endpoint}/${id}/move`, null, {
+            params: { parentId: newParentId }
         });
     }
 
     /**
-     * Move category to different parent
+     * Reorder category
      */
-    async move(id: number, newParentId: number | null): Promise<Category> {
-        return apiClient.patch<Category>(`${this.endpoint}/${id}/move`, { parentId: newParentId });
-    }
-
-    /**
-     * Reorder categories
-     */
-    async reorder(parentId: number | null, orderedIds: number[]): Promise<void> {
-        return apiClient.post<void>(`${this.endpoint}/reorder`, {
-            parentId,
-            orderedIds,
+    async reorder(id: number, order: number): Promise<void> {
+        return apiClient.patch<void>(`${this.endpoint}/${id}/reorder`, null, {
+            params: { order }
         });
     }
 }

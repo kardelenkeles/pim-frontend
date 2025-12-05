@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { DndContext, rectIntersection, DragEndEvent, DragOverlay, useSensor, useSensors, PointerSensor, DragStartEvent } from '@dnd-kit/core';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -21,21 +23,75 @@ import { ApiError } from '@/lib/apiClient';
 
 type ModalMode = 'add' | 'edit' | 'delete' | 'move' | null;
 
+const RootDropZone = () => {
+    const { setNodeRef, isOver } = useDroppable({
+        id: 'drop-root',
+        data: { categoryId: null },
+    });
+
+    return (
+        <div
+            ref={setNodeRef}
+            className={`mb-4 p-4 border-2 border-dashed rounded-lg text-center transition-colors ${isOver
+                ? 'border-blue-400 bg-blue-50 dark:border-blue-600 dark:bg-blue-900/30'
+                : 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/20'
+                }`}
+        >
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+                {isOver ? 'Drop here to make root category' : 'Drag categories here to make them root level'}
+            </p>
+        </div>
+    );
+};
+
 interface TreeNodeProps {
     category: CategoryTree;
     onEdit: (category: Category) => void;
     onDelete: (category: Category) => void;
     onMove: (category: Category) => void;
     onAddChild: (parentId: number) => void;
+    isDragging?: boolean;
 }
 
-const TreeNode: React.FC<TreeNodeProps> = ({ category, onEdit, onDelete, onMove, onAddChild }) => {
+const TreeNode: React.FC<TreeNodeProps> = ({ category, onEdit, onDelete, onMove, onAddChild, isDragging = false }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     const hasChildren = category.subCategories && category.subCategories.length > 0;
 
+    const { attributes, listeners, setNodeRef: setDragRef, isDragging: isDraggingThis } = useDraggable({
+        id: `category-${category.id}`,
+        data: { categoryId: category.id },
+    });
+
+    const { setNodeRef: setDropRef, isOver } = useDroppable({
+        id: `drop-${category.id}`,
+        data: { categoryId: category.id },
+    });
+
+    // Combine both refs on the same element
+    const setRefs = (element: HTMLDivElement | null) => {
+        setDragRef(element);
+        setDropRef(element);
+    };
+
     return (
         <div className="ml-4">
-            <div className="flex items-center gap-2 py-2 group">
+            <div
+                ref={setRefs}
+                className={`flex items-center gap-2 py-2 px-2 group transition-all rounded-lg ${isOver ? 'bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-400 dark:border-blue-600' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                    } ${isDraggingThis ? 'opacity-40' : ''}`}
+            >
+                {/* Drag Handle */}
+                <div
+                    {...listeners}
+                    {...attributes}
+                    className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded flex-shrink-0"
+                    title="Drag to move"
+                >
+                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                    </svg>
+                </div>
+
                 {/* Expand/Collapse Button */}
                 {hasChildren && (
                     <button
@@ -107,6 +163,15 @@ export default function CategoriesPage() {
     const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
     const [parentId, setParentId] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [activeId, setActiveId] = useState<string | null>(null);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        })
+    );
 
     // React Hook Form setup
     const {
@@ -132,16 +197,14 @@ export default function CategoriesPage() {
 
     const { data: allCategoriesData } = useQuery({
         queryKey: ['categories', 'all'],
-        queryFn: () => categoryService.getAll({ size: 1000 }),
+        queryFn: () => categoryService.getAllUnpaginated(),
     });
 
     // Handle different response formats from backend
     const categoriesTree: CategoryTree[] = categoriesTreeData?.data || [];
 
-    // Handle both array and PageResponse formats
-    const allCategories: Category[] = Array.isArray(allCategoriesData)
-        ? allCategoriesData
-        : allCategoriesData?.content || [];
+    // Handle ApiResponse format
+    const allCategories: Category[] = allCategoriesData?.data || [];
 
     // Mutations
     const createMutation = useMutation({
@@ -256,6 +319,57 @@ export default function CategoriesPage() {
         moveMutation.mutate({ id: selectedCategory.id, newParentId: parentId });
     };
 
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        setActiveId(null);
+
+        if (!over) return;
+
+        const draggedId = active.id.toString();
+        const targetId = over.id.toString();
+
+        // Don't drop on itself
+        if (draggedId === targetId.replace('drop-', 'category-')) return;
+
+        const draggedCategoryId = parseInt(draggedId.replace('category-', ''));
+
+        if (isNaN(draggedCategoryId)) return;
+
+        // Handle root drop
+        if (targetId === 'drop-root') {
+            moveMutation.mutate(
+                { id: draggedCategoryId, newParentId: null },
+                {
+                    onError: (error) => {
+                        setError(error instanceof ApiError ? error.message : 'Failed to move category');
+                    },
+                }
+            );
+            return;
+        }
+
+        const targetCategoryId = parseInt(targetId.replace('drop-', ''));
+        if (isNaN(targetCategoryId)) return;
+
+        // Move dragged category under target category
+        moveMutation.mutate(
+            { id: draggedCategoryId, newParentId: targetCategoryId },
+            {
+                onError: (error) => {
+                    setError(error instanceof ApiError ? error.message : 'Failed to move category');
+                },
+            }
+        );
+    };
+
+    const handleDragStart = (event: DragStartEvent) => {
+        setActiveId(event.active.id.toString());
+    };
+
+    const handleDragCancel = () => {
+        setActiveId(null);
+    };
+
     // Filter out the selected category and its descendants from parent selection
     const getAvailableParents = () => {
         if (!selectedCategory) return allCategories;
@@ -315,16 +429,32 @@ export default function CategoriesPage() {
                         </div>
                     ) : (
                         <div className="p-6">
-                            {categoriesTree.map((category) => (
-                                <TreeNode
-                                    key={category.id}
-                                    category={category}
-                                    onEdit={openEditModal}
-                                    onDelete={openDeleteModal}
-                                    onMove={openMoveModal}
-                                    onAddChild={openAddModal}
-                                />
-                            ))}
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={rectIntersection}
+                                onDragStart={handleDragStart}
+                                onDragEnd={handleDragEnd}
+                                onDragCancel={handleDragCancel}
+                            >
+                                <RootDropZone />
+                                {categoriesTree.map((category) => (
+                                    <TreeNode
+                                        key={category.id}
+                                        category={category}
+                                        onEdit={openEditModal}
+                                        onDelete={openDeleteModal}
+                                        onMove={openMoveModal}
+                                        onAddChild={openAddModal}
+                                    />
+                                ))}
+                                <DragOverlay>
+                                    {activeId ? (
+                                        <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-3 border-2 border-primary">
+                                            <span className="font-medium">Dragging...</span>
+                                        </div>
+                                    ) : null}
+                                </DragOverlay>
+                            </DndContext>
                         </div>
                     )}
                 </div>
