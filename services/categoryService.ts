@@ -55,6 +55,15 @@ export interface ApiResponse<T> {
     data: T[];
 }
 
+// Backend's actual paginated response format
+interface BackendPageResponse<T> {
+    data: T[];
+    total: number;
+    page: number;
+    size: number;
+    totalPages: number;
+}
+
 class CategoryService {
     private readonly endpoint = '/categories';
 
@@ -73,9 +82,21 @@ class CategoryService {
             backendParams.sort = `${params.sortBy},${params.sortDirection}`;
         }
 
-        return apiClient.get<PageResponse<Category>>(this.endpoint, {
+        const response = await apiClient.get<BackendPageResponse<Category>>(this.endpoint, {
             params: backendParams
         });
+
+        // Transform backend response to PageResponse format
+        return {
+            content: response.data,
+            totalElements: response.total,
+            totalPages: response.totalPages,
+            size: response.size,
+            number: response.page,
+            first: response.page === 0,
+            last: response.page >= response.totalPages - 1,
+            empty: response.data.length === 0,
+        };
     }
 
     /**
@@ -138,9 +159,13 @@ class CategoryService {
 
     /**
      * Delete category
+     * @param id Category ID to delete
+     * @param action 'cascade' to delete all subcategories, 'reassign' to move them up one level
      */
-    async delete(id: number): Promise<void> {
-        return apiClient.delete<void>(`${this.endpoint}/${id}`);
+    async delete(id: number, action: 'cascade' | 'reassign' = 'cascade'): Promise<void> {
+        return apiClient.delete<void>(`${this.endpoint}/${id}`, {
+            params: { action }
+        });
     }
 
     /**
@@ -148,6 +173,7 @@ class CategoryService {
      */
     async search(keyword: string, params?: { page?: number; size?: number; sortBy?: string; sortDirection?: string }): Promise<PageResponse<Category>> {
         const backendParams: any = {
+            paginated: true,
             keyword,
             page: params?.page,
             size: params?.size,
@@ -158,9 +184,22 @@ class CategoryService {
             backendParams.sort = `${params.sortBy},${params.sortDirection}`;
         }
 
-        return apiClient.get<PageResponse<Category>>(`${this.endpoint}/search`, {
+        // Ana endpoint'i keyword parametresiyle kullan (backend /search endpoint'i çalışmıyor)
+        const response = await apiClient.get<BackendPageResponse<Category>>(this.endpoint, {
             params: backendParams,
         });
+
+        // Transform backend response to PageResponse format
+        return {
+            content: response.data,
+            totalElements: response.total,
+            totalPages: response.totalPages,
+            size: response.size,
+            number: response.page,
+            first: response.page === 0,
+            last: response.page >= response.totalPages - 1,
+            empty: response.data.length === 0,
+        };
     }
 
     /**
