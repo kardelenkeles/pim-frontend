@@ -39,6 +39,8 @@ export default function ProductsPage() {
         status: undefined,
         page: 0,
         size: 10,
+        sortBy: 'createdAt',
+        sortDirection: 'desc',
     });
     const [searchInput, setSearchInput] = useState('');
 
@@ -171,6 +173,8 @@ export default function ProductsPage() {
             status: undefined,
             page: 0,
             size: 10,
+            sortBy: 'createdAt',
+            sortDirection: 'desc',
         });
     };
 
@@ -344,6 +348,59 @@ export default function ProductsPage() {
                             <Button variant="ghost" onClick={clearFilters} className="w-full">
                                 Clear Filters
                             </Button>
+                        </div>
+                    </div>
+
+                    {/* Second row: Sort and filters */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mt-4">
+                        {/* Sort By */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Sort By
+                            </label>
+                            <select
+                                value={filters.sortBy || 'createdAt'}
+                                onChange={(e) => handleFilterChange('sortBy', e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                            >
+                                <option value="createdAt">Created Date</option>
+                                <option value="updatedAt">Updated Date</option>
+                                <option value="title">Title</option>
+                                <option value="barcode">Barcode</option>
+                                <option value="status">Status</option>
+                            </select>
+                        </div>
+
+                        {/* Sort Direction */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Direction
+                            </label>
+                            <select
+                                value={filters.sortDirection || 'desc'}
+                                onChange={(e) => handleFilterChange('sortDirection', e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                            >
+                                <option value="asc">Ascending</option>
+                                <option value="desc">Descending</option>
+                            </select>
+                        </div>
+
+                        {/* Page Size */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Per Page
+                            </label>
+                            <select
+                                value={filters.size}
+                                onChange={(e) => handleFilterChange('size', Number(e.target.value))}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                            >
+                                <option value="10">10</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
                         </div>
 
                         {/* Category Filter */}

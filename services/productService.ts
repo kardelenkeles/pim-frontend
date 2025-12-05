@@ -88,6 +88,8 @@ export interface ProductFilter {
     status?: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
     page?: number;
     size?: number;
+    sortBy?: string;
+    sortDirection?: 'asc' | 'desc';
 }
 
 class ProductService {
@@ -100,7 +102,6 @@ class ProductService {
         const response = await apiClient.get<ProductSearchResponse>(this.endpoint, {
             params: { paginated: true, ...params }
         });
-        console.log('GetAll response:', response);
         // Backend response'unu PageResponse formatına dönüştür
         return {
             content: response.data,
@@ -118,8 +119,24 @@ class ProductService {
      * Search products with filters
      */
     async search(params?: ProductFilter): Promise<PageResponse<Product>> {
-        const response = await apiClient.get<ProductSearchResponse>(`${this.endpoint}/search`, { params });
-        console.log('Search response:', response);
+        // Backend parametrelerine dönüştür
+        const backendParams: any = {
+            keyword: params?.keyword,
+            categoryId: params?.categoryId,
+            brandId: params?.brandId,
+            status: params?.status,
+            page: params?.page,
+            size: params?.size,
+        };
+
+        // Sort parametresini field,direction formatında ekle
+        if (params?.sortBy && params?.sortDirection) {
+            backendParams.sort = `${params.sortBy},${params.sortDirection}`;
+        }
+
+        const response = await apiClient.get<ProductSearchResponse>(`${this.endpoint}/search`, {
+            params: backendParams
+        });
         // Backend response'unu PageResponse formatına dönüştür
         return {
             content: response.data,
