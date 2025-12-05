@@ -10,18 +10,27 @@ export interface ProductImage {
     order: number;
 }
 
+// Backend'den gelen Quality yapısı
+export interface Quality {
+    id: number;
+    score: number;
+    result: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
 // Backend'den gelen Product yapısı
 export interface Product {
     id: number;
     barcode?: string;
-    categoryId: number;
-    categoryName?: string;
-    brandId?: number;
-    brandName?: string;
-    title: string;
-    description?: string;
-    status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
-    quality?: string | null;
+    categoryId: number | null;
+    categoryName?: string | null;
+    brandId?: number | null;
+    brandName?: string | null;
+    title: string | null;
+    description?: string | null;
+    status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+    quality?: Quality | null;
     attributes?: Record<string, any>;
     images?: ProductImage[];
     createdAt: string;
@@ -30,13 +39,12 @@ export interface Product {
 
 // Zod Schema - Create Product
 export const createProductSchema = z.object({
-    barcode: z.string().optional(),
-    categoryId: z.number().min(1, 'Category is required'),
+    barcode: z.string().min(1, 'Barcode is required'),
+    categoryId: z.number().optional(),
     brandId: z.number().optional(),
-    title: z.string().min(1, 'Title is required').max(255, 'Title is too long'),
+    title: z.string().optional(),
     description: z.string().optional(),
-    status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
-    quality: z.string().optional(),
+    status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']).optional(),
     attributes: z.record(z.string(), z.any()).optional(),
     images: z.array(z.object({
         imageUrl: z.string().url('Invalid image URL'),
@@ -48,12 +56,11 @@ export const createProductSchema = z.object({
 // Zod Schema - Update Product
 export const updateProductSchema = z.object({
     barcode: z.string().min(1, 'Barcode is required').optional(),
-    categoryId: z.number().min(1, 'Category is required').optional(),
+    categoryId: z.number().optional(),
     brandId: z.number().optional(),
-    title: z.string().min(1, 'Title is required').max(255, 'Title is too long').optional(),
+    title: z.string().optional(),
     description: z.string().optional(),
-    status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
-    quality: z.string().optional(),
+    status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']).optional(),
     attributes: z.record(z.string(), z.any()).optional(),
     images: z.array(z.object({
         id: z.number().optional(),
@@ -72,23 +79,32 @@ export interface ProductListResponse {
     total: number;
 }
 
-export interface ProductFilter extends PageRequest {
-    search?: string;
+export interface ProductFilter {
+    keyword?: string;
     categoryId?: number;
     brandId?: number;
-    status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
-    quality?: string;
+    status?: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+    page?: number;
+    size?: number;
 }
 
 class ProductService {
     private readonly endpoint = '/products';
 
     /**
-     * Get all products with pagination and filters
+     * Get all products with pagination
      */
-    async getAll(params?: ProductFilter): Promise<ProductListResponse> {
-        const response = await apiClient.get<ProductListResponse>(this.endpoint, { params });
-        return response;
+    async getAll(params?: { page?: number; size?: number; paginated?: boolean }): Promise<PageResponse<Product>> {
+        return apiClient.get<PageResponse<Product>>(this.endpoint, {
+            params: { paginated: true, ...params }
+        });
+    }
+
+    /**
+     * Search products with filters
+     */
+    async search(params?: ProductFilter): Promise<PageResponse<Product>> {
+        return apiClient.get<PageResponse<Product>>(`${this.endpoint}/search`, { params });
     }
 
     /**
@@ -96,20 +112,6 @@ class ProductService {
      */
     async getById(id: number): Promise<Product> {
         return apiClient.get<Product>(`${this.endpoint}/${id}`);
-    }
-
-    /**
-     * Get product by slug
-     */
-    async getBySlug(slug: string): Promise<Product> {
-        return apiClient.get<Product>(`${this.endpoint}/slug/${slug}`);
-    }
-
-    /**
-     * Get product by SKU
-     */
-    async getBySku(sku: string): Promise<Product> {
-        return apiClient.get<Product>(`${this.endpoint}/sku/${sku}`);
     }
 
     /**
@@ -134,89 +136,19 @@ class ProductService {
     }
 
     /**
+     * Update product status
+     */
+    async updateStatus(id: number, status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED'): Promise<void> {
+        return apiClient.patch<void>(`${this.endpoint}/${id}/status`, null, {
+            params: { status }
+        });
+    }
+
+    /**
      * Delete product
      */
     async delete(id: number): Promise<void> {
         return apiClient.delete<void>(`${this.endpoint}/${id}`);
-    }
-
-    /**
-     * Search products
-     */
-    async search(query: string, params?: PageRequest): Promise<PageResponse<Product>> {
-        return apiClient.get<PageResponse<Product>>(`${this.endpoint}/search`, {
-            params: { q: query, ...params },
-        });
-    }
-
-    /**
-     * Get featured products
-     */
-    async getFeatured(params?: PageRequest): Promise<PageResponse<Product>> {
-        return apiClient.get<PageResponse<Product>>(`${this.endpoint}/featured`, { params });
-    }
-
-    /**
-     * Get products by category
-     */
-    async getByCategory(categoryId: number, params?: PageRequest): Promise<PageResponse<Product>> {
-        return apiClient.get<PageResponse<Product>>(`${this.endpoint}/category/${categoryId}`, {
-            params,
-        });
-    }
-
-    /**
-     * Get products by brand
-     */
-    async getByBrand(brandId: number, params?: PageRequest): Promise<PageResponse<Product>> {
-        return apiClient.get<PageResponse<Product>>(`${this.endpoint}/brand/${brandId}`, { params });
-    }
-
-    /**
-     * Update product stock
-     */
-    async updateStock(id: number, stock: number): Promise<Product> {
-        return apiClient.patch<Product>(`${this.endpoint}/${id}/stock`, { stock });
-    }
-
-    /**
-     * Bulk update products
-     */
-    async bulkUpdate(ids: number[], data: Partial<UpdateProductDto>): Promise<void> {
-        return apiClient.patch<void>(`${this.endpoint}/bulk`, { ids, data });
-    }
-
-    /**
-     * Bulk delete products
-     */
-    async bulkDelete(ids: number[]): Promise<void> {
-        return apiClient.post<void>(`${this.endpoint}/bulk-delete`, { ids });
-    }
-
-    /**
-     * Check if SKU exists
-     */
-    async skuExists(sku: string, excludeId?: number): Promise<boolean> {
-        const result = await apiClient.get<{ exists: boolean }>(
-            `${this.endpoint}/check-sku`,
-            {
-                params: { sku, excludeId },
-            }
-        );
-        return result.exists;
-    }
-
-    /**
-     * Check if barcode exists
-     */
-    async barcodeExists(barcode: string, excludeId?: number): Promise<boolean> {
-        const result = await apiClient.get<{ exists: boolean }>(
-            `${this.endpoint}/check-barcode`,
-            {
-                params: { barcode, excludeId },
-            }
-        );
-        return result.exists;
     }
 }
 

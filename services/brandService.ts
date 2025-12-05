@@ -32,9 +32,8 @@ export const updateBrandSchema = z.object({
 export type CreateBrandInput = z.infer<typeof createBrandSchema>;
 export type UpdateBrandInput = z.infer<typeof updateBrandSchema>;
 
-export interface BrandListResponse {
-    data: Brand[];
-    total: number;
+export interface ApiResponse<T> {
+    data: T[];
 }
 
 class BrandService {
@@ -43,8 +42,19 @@ class BrandService {
     /**
      * Get all brands with pagination
      */
-    async getAll(params?: PageRequest): Promise<BrandListResponse> {
-        return apiClient.get<BrandListResponse>(this.endpoint, { params });
+    async getAll(params?: { page?: number; size?: number; paginated?: boolean }): Promise<PageResponse<Brand>> {
+        return apiClient.get<PageResponse<Brand>>(this.endpoint, {
+            params: { paginated: true, ...params }
+        });
+    }
+
+    /**
+     * Get all brands without pagination
+     */
+    async getAllUnpaginated(): Promise<ApiResponse<Brand>> {
+        return apiClient.get<ApiResponse<Brand>>(this.endpoint, {
+            params: { paginated: false }
+        });
     }
 
     /**
@@ -83,11 +93,11 @@ class BrandService {
     }
 
     /**
-     * Search brands by name
+     * Search brands by keyword
      */
-    async search(query: string, params?: PageRequest): Promise<PageResponse<Brand>> {
+    async search(keyword: string, params?: { page?: number; size?: number }): Promise<PageResponse<Brand>> {
         return apiClient.get<PageResponse<Brand>>(`${this.endpoint}/search`, {
-            params: { q: query, ...params },
+            params: { keyword, ...params },
         });
     }
 }
