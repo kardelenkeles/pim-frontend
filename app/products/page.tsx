@@ -192,9 +192,9 @@ export default function ProductsPage() {
         setSelectedProduct(product);
         updateForm.reset({
             barcode: product.barcode || '',
-            categoryId: product.categoryId,
-            brandId: product.brandId,
-            title: product.title,
+            categoryId: product.categoryId ?? undefined,
+            brandId: product.brandId ?? undefined,
+            title: product.title ?? '',
             description: product.description || '',
             status: product.status,
             attributes: product.attributes || {},
@@ -491,7 +491,7 @@ export default function ProductsPage() {
                                 Category
                             </label>
                             <select
-                                {...(modalMode === 'add' ? createForm.register('categoryId', { valueAsNumber: true }) : updateForm.register('categoryId', { valueAsNumber: true }))}
+                                {...(modalMode === 'add' ? createForm.register('categoryId', { setValueAs: v => v === '' ? undefined : Number(v) }) : updateForm.register('categoryId', { setValueAs: v => v === '' ? undefined : Number(v) }))}
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
                             >
                                 <option value="">Select Category</option>

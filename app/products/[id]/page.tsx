@@ -72,7 +72,7 @@ export default function ProductDetailPage() {
                 items={[
                     { label: 'Dashboard', href: '/' },
                     { label: 'Products', href: '/products' },
-                    { label: product.title },
+                    { label: product.title || 'Product' },
                 ]}
             />
 
@@ -150,10 +150,15 @@ export default function ProductDetailPage() {
                                     {product.quality && (
                                         <div>
                                             <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                                                Quality
+                                                Quality Score
                                             </dt>
                                             <dd className="mt-1 text-base text-gray-900 dark:text-white">
-                                                {product.quality}
+                                                <span className={`font-semibold ${product.quality.score >= 80 ? 'text-green-600' :
+                                                    product.quality.score >= 50 ? 'text-yellow-600' :
+                                                        'text-red-600'
+                                                    }`}>
+                                                    {product.quality.score}%
+                                                </span>
                                             </dd>
                                         </div>
                                     )}

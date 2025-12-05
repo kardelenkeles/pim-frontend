@@ -10,10 +10,13 @@ import type { Product } from '@/services/productService';
 
 export default function Home() {
   // Fetch dashboard stats
-  const { data: statsData, isLoading: statsLoading } = useQuery({
+  const { data: statsData, isLoading: statsLoading, error } = useQuery({
     queryKey: ['dashboard', 'stats'],
     queryFn: () => dashboardService.getStats(),
   });
+
+  console.log('Dashboard data:', statsData);
+  console.log('Dashboard error:', error);
 
   const stats = statsData ? [
     { label: 'Total Products', value: statsData.totalProducts.toString() },

@@ -73,6 +73,14 @@ export const updateProductSchema = z.object({
 export type CreateProductDto = z.infer<typeof createProductSchema>;
 export type UpdateProductDto = z.infer<typeof updateProductSchema>;
 
+export interface ProductSearchResponse {
+    data: Product[];
+    total: number;
+    page: number;
+    size: number;
+    totalPages: number;
+}
+
 export interface ProductFilter {
     keyword?: string;
     categoryId?: number;
@@ -89,16 +97,40 @@ class ProductService {
      * Get all products with pagination
      */
     async getAll(params?: { page?: number; size?: number; paginated?: boolean }): Promise<PageResponse<Product>> {
-        return apiClient.get<PageResponse<Product>>(this.endpoint, {
+        const response = await apiClient.get<ProductSearchResponse>(this.endpoint, {
             params: { paginated: true, ...params }
         });
+        console.log('GetAll response:', response);
+        // Backend response'unu PageResponse formatına dönüştür
+        return {
+            content: response.data,
+            totalElements: response.total,
+            totalPages: response.totalPages,
+            size: response.size,
+            number: response.page,
+            first: response.page === 0,
+            last: response.page === response.totalPages - 1,
+            empty: response.data.length === 0,
+        };
     }
 
     /**
      * Search products with filters
      */
     async search(params?: ProductFilter): Promise<PageResponse<Product>> {
-        return apiClient.get<PageResponse<Product>>(`${this.endpoint}/search`, { params });
+        const response = await apiClient.get<ProductSearchResponse>(`${this.endpoint}/search`, { params });
+        console.log('Search response:', response);
+        // Backend response'unu PageResponse formatına dönüştür
+        return {
+            content: response.data,
+            totalElements: response.total,
+            totalPages: response.totalPages,
+            size: response.size,
+            number: response.page,
+            first: response.page === 0,
+            last: response.page === response.totalPages - 1,
+            empty: response.data.length === 0,
+        };
     }
 
     /**
