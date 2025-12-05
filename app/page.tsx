@@ -15,9 +15,6 @@ export default function Home() {
     queryFn: () => dashboardService.getStats(),
   });
 
-  console.log('Dashboard data:', statsData);
-  console.log('Dashboard error:', error);
-
   const stats = statsData ? [
     { label: 'Total Products', value: statsData.totalProducts.toString() },
     { label: 'Active Products', value: statsData.activeProducts.toString() },

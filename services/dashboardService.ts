@@ -29,10 +29,6 @@ export interface DashboardStats {
     recentProducts: Product[];
 }
 
-export interface DashboardStatsResponse {
-    data: DashboardStats;
-}
-
 export type ExportFormat = 'CSV' | 'JSON';
 
 class DashboardService {
@@ -63,8 +59,7 @@ class DashboardService {
      * Get dashboard statistics
      */
     async getStats(): Promise<DashboardStats> {
-        const response = await apiClient.get<DashboardStatsResponse>(`${this.endpoint}/stats`);
-        return response.data;
+        return apiClient.get<DashboardStats>(`${this.endpoint}/stats`);
     }
 }
 
