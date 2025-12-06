@@ -1,72 +1,74 @@
 import { apiClient } from '@/lib/apiClient';
-import type { ProductImage } from './productService';
 
-export interface AddImageDto {
+interface ApiResponse<T> {
+    data: T[];
+}
+
+export interface ProductImage {
+    id: number;
+    productId: number;
     imageUrl: string;
     altText?: string;
     order: number;
 }
 
-export interface UpdateImageDto {
+export interface ProductImageCreateRequest {
+    productId: number;
+    imageUrl: string;
+    altText?: string;
+    order: number;
+}
+
+export interface ProductImageUpdateRequest {
     imageUrl?: string;
     altText?: string;
     order?: number;
 }
 
-export interface ReorderImageDto {
-    imageId: number;
-    newOrder: number;
-}
-
 class ProductImageService {
-    private readonly endpoint = '/products';
+    private readonly endpoint = '/product-images';
 
     /**
-     * Add image to product
+     * Add a new product image
      */
-    async add(productId: number, data: AddImageDto): Promise<ProductImage> {
-        return apiClient.post<ProductImage>(
-            `${this.endpoint}/${productId}/images`,
-            data
-        );
+    async addImage(data: ProductImageCreateRequest): Promise<ProductImage> {
+        return apiClient.post<ProductImage>(this.endpoint, data);
     }
 
     /**
      * Update product image
      */
-    async update(productId: number, imageId: number, data: UpdateImageDto): Promise<ProductImage> {
-        return apiClient.put<ProductImage>(
-            `${this.endpoint}/${productId}/images/${imageId}`,
-            data
-        );
+    async updateImage(id: number, data: ProductImageUpdateRequest): Promise<ProductImage> {
+        return apiClient.put<ProductImage>(`${this.endpoint}/${id}`, data);
     }
 
     /**
-     * Delete product image
+     * Get image by ID
      */
-    async delete(productId: number, imageId: number): Promise<void> {
-        return apiClient.delete<void>(
-            `${this.endpoint}/${productId}/images/${imageId}`
-        );
+    async getById(id: number): Promise<ProductImage> {
+        return apiClient.get<ProductImage>(`${this.endpoint}/${id}`);
     }
 
     /**
      * Get all images for a product
      */
-    async getAll(productId: number): Promise<ProductImage[]> {
-        return apiClient.get<ProductImage[]>(
-            `${this.endpoint}/${productId}/images`
-        );
+    async getByProductId(productId: number): Promise<ProductImage[]> {
+        const response = await apiClient.get<ApiResponse<ProductImage>>(`${this.endpoint}/product/${productId}`);
+        return response.data;
     }
 
     /**
-     * Reorder product images
+     * Reorder images
      */
-    async reorder(productId: number, reorders: ReorderImageDto[]): Promise<void> {
-        return apiClient.put<void>(
-            `${this.endpoint}/${productId}/images/reorder`,
-            reorders
-        );
+    async reorderImages(productId: number, imageOrders: Record<number, number>): Promise<void> {
+        return apiClient.patch<void>(`${this.endpoint}/product/${productId}/reorder`, imageOrders);
+    }
+
+    /**
+     * Delete product image
+     */
+    async deleteImage(id: number): Promise<void> {
+        return apiClient.delete<void>(`${this.endpoint}/${id}`);
     }
 }
 

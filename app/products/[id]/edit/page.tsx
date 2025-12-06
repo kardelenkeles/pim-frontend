@@ -12,6 +12,7 @@ import { productService } from '@/services/productService';
 import { brandService, type Brand } from '@/services/brandService';
 import { categoryService, type Category, type CategoryTree } from '@/services/categoryService';
 import { productAttributeService, type ProductAttribute } from '@/services/productAttributeService';
+import { productImageService, type ProductImage } from '@/services/productImageService';
 import { ApiError } from '@/lib/apiClient';
 
 // Zod validation schema for create
@@ -34,7 +35,9 @@ const updateProductSchema = z.object({
     status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']).optional(),
 });
 
-type ProductFormData = z.infer<typeof createProductSchema>;
+type CreateProductFormData = z.infer<typeof createProductSchema>;
+type UpdateProductFormData = z.infer<typeof updateProductSchema>;
+type ProductFormData = CreateProductFormData | UpdateProductFormData;
 
 interface TreeSelectProps {
     categories: CategoryTree[];
@@ -142,14 +145,22 @@ export default function ProductEditPage() {
     const [editKey, setEditKey] = useState('');
     const [editValue, setEditValue] = useState('');
 
+    // Image management state
+    const [newImageUrl, setNewImageUrl] = useState('');
+    const [newImageAltText, setNewImageAltText] = useState('');
+    const [editingImage, setEditingImage] = useState<number | null>(null);
+    const [editImageUrl, setEditImageUrl] = useState('');
+    const [editImageAltText, setEditImageAltText] = useState('');
+    const [draggedImageId, setDraggedImageId] = useState<number | null>(null);
+
     const {
         register,
         handleSubmit,
         setValue,
         watch,
         formState: { errors },
-    } = useForm<ProductFormData>({
-        resolver: zodResolver(isEdit ? updateProductSchema : createProductSchema),
+    } = useForm<CreateProductFormData>({
+        resolver: zodResolver(isEdit ? updateProductSchema : createProductSchema) as any,
         defaultValues: {
             title: '',
             description: '',
@@ -166,6 +177,18 @@ export default function ProductEditPage() {
     const { data: attributes = [] } = useQuery({
         queryKey: ['product-attributes', productId],
         queryFn: () => productAttributeService.getByProductId(productId!),
+        enabled: isEdit && productId !== null,
+    });
+
+    // Fetch images for existing product
+    const { data: images = [] } = useQuery({
+        queryKey: ['product-images', productId],
+        queryFn: async () => {
+            console.log('Fetching images for product:', productId);
+            const result = await productImageService.getByProductId(productId!);
+            console.log('Images fetched:', result);
+            return result;
+        },
         enabled: isEdit && productId !== null,
     });
 
@@ -212,6 +235,61 @@ export default function ProductEditPage() {
         },
     });
 
+    // Image mutations
+    const addImageMutation = useMutation({
+        mutationFn: (data: { productId: number; imageUrl: string; altText?: string; order: number }) =>
+            productImageService.addImage(data),
+        onSuccess: (result) => {
+            console.log('Image added successfully:', result);
+            queryClient.invalidateQueries({ queryKey: ['product-images', productId] });
+            setNewImageUrl('');
+            setNewImageAltText('');
+            setError(null);
+        },
+        onError: (err: ApiError) => {
+            console.error('Error adding image:', err);
+            setError(`Error adding image: ${err.message}`);
+        },
+    });
+
+    const updateImageMutation = useMutation({
+        mutationFn: (data: { id: number; imageUrl?: string; altText?: string }) =>
+            productImageService.updateImage(data.id, { imageUrl: data.imageUrl, altText: data.altText }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['product-images', productId] });
+            setEditingImage(null);
+            setEditImageUrl('');
+            setEditImageAltText('');
+            setError(null);
+        },
+        onError: (err: ApiError) => {
+            setError(`Error updating image: ${err.message}`);
+        },
+    });
+
+    const deleteImageMutation = useMutation({
+        mutationFn: (id: number) => productImageService.deleteImage(id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['product-images', productId] });
+            setError(null);
+        },
+        onError: (err: ApiError) => {
+            setError(`Error deleting image: ${err.message}`);
+        },
+    });
+
+    const reorderImagesMutation = useMutation({
+        mutationFn: (data: { productId: number; imageOrders: Record<number, number> }) =>
+            productImageService.reorderImages(data.productId, data.imageOrders),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['product-images', productId] });
+            setError(null);
+        },
+        onError: (err: ApiError) => {
+            setError(`Error reordering images: ${err.message}`);
+        },
+    });
+
     useEffect(() => {
         loadInitialData();
     }, []);
@@ -245,13 +323,13 @@ export default function ProductEditPage() {
         }
     };
 
-    const onSubmit = async (data: ProductFormData) => {
+    const onSubmit = async (data: CreateProductFormData) => {
         setSubmitting(true);
         setError(null);
 
         try {
             if (isEdit && productId) {
-                await productService.update(productId, data);
+                await productService.update(productId, data as any);
             } else {
                 await productService.create(data);
             }
@@ -315,7 +393,92 @@ export default function ProductEditPage() {
         }
     };
 
-    if (loading) {
+    // Image handlers
+    const handleAddImage = () => {
+        if (!newImageUrl.trim() || !productId) {
+            console.log('Image add validation failed', { newImageUrl, productId });
+            return;
+        }
+
+        const currentImages = images || [];
+        const maxOrder = currentImages.length > 0
+            ? Math.max(...currentImages.map((img: ProductImage) => img.order))
+            : 0;
+
+        console.log('Adding image:', {
+            productId,
+            imageUrl: newImageUrl.trim(),
+            altText: newImageAltText.trim() || undefined,
+            order: maxOrder + 1,
+        });
+
+        addImageMutation.mutate({
+            productId: productId,
+            imageUrl: newImageUrl.trim(),
+            altText: newImageAltText.trim() || undefined,
+            order: maxOrder + 1,
+        });
+    }; const handleEditImage = (image: ProductImage) => {
+        setEditingImage(image.id);
+        setEditImageUrl(image.imageUrl);
+        setEditImageAltText(image.altText || '');
+    };
+
+    const handleUpdateImage = () => {
+        if (!editingImage || !editImageUrl.trim()) return;
+
+        updateImageMutation.mutate({
+            id: editingImage,
+            imageUrl: editImageUrl.trim(),
+            altText: editImageAltText.trim() || undefined,
+        });
+    };
+
+    const handleCancelEditImage = () => {
+        setEditingImage(null);
+        setEditImageUrl('');
+        setEditImageAltText('');
+    };
+
+    const handleDeleteImage = (id: number) => {
+        if (confirm('Are you sure you want to delete this image?')) {
+            deleteImageMutation.mutate(id);
+        }
+    };
+
+    const handleDragStart = (e: React.DragEvent, imageId: number) => {
+        setDraggedImageId(imageId);
+        e.dataTransfer.effectAllowed = 'move';
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    };
+
+    const handleDrop = (e: React.DragEvent, targetImageId: number) => {
+        e.preventDefault();
+
+        if (!draggedImageId || draggedImageId === targetImageId || !productId) return;
+
+        const currentImages = images || [];
+        const draggedImage = currentImages.find((img: ProductImage) => img.id === draggedImageId);
+        const targetImage = currentImages.find((img: ProductImage) => img.id === targetImageId);
+
+        if (!draggedImage || !targetImage) return;
+
+        const imageOrders: Record<number, number> = {
+            [draggedImageId]: targetImage.order,
+            [targetImageId]: draggedImage.order,
+        };
+
+        reorderImagesMutation.mutate({
+            productId: productId,
+            imageOrders,
+        });
+
+        setDraggedImageId(null);
+    }; if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <p className="text-gray-500 dark:text-gray-400">Loading...</p>
@@ -560,6 +723,167 @@ export default function ProductEditPage() {
                                                             Delete
                                                         </Button>
                                                     </>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Product Images */}
+                    {isEdit && productId && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+                            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                Product Images
+                            </h2>
+
+                            {/* Add New Image */}
+                            <div className="mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
+                                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                                    Add New Image
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <input
+                                        type="text"
+                                        value={newImageUrl}
+                                        onChange={(e) => setNewImageUrl(e.target.value)}
+                                        placeholder="Image URL"
+                                        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={newImageAltText}
+                                        onChange={(e) => setNewImageAltText(e.target.value)}
+                                        placeholder="Alt Text (optional, for SEO)"
+                                        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="primary"
+                                        onClick={handleAddImage}
+                                        disabled={addImageMutation.isPending}
+                                    >
+                                        {addImageMutation.isPending ? 'Adding...' : 'Add Image'}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Images List */}
+                            <div>
+                                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                                    Current Images ({images?.length || 0})
+                                    <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                                        (Drag & drop to reorder)
+                                    </span>
+                                </h3>
+                                {!images || images.length === 0 ? (
+                                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                        No images added yet. Add your first image above.
+                                    </p>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {[...images].sort((a, b) => a.order - b.order).map((image) => (
+                                            <div
+                                                key={image.id}
+                                                draggable
+                                                onDragStart={(e) => handleDragStart(e, image.id)}
+                                                onDragOver={handleDragOver}
+                                                onDrop={(e) => handleDrop(e, image.id)}
+                                                className={`relative border border-gray-200 dark:border-gray-700 rounded-lg p-4 transition-all ${draggedImageId === image.id
+                                                    ? 'opacity-50'
+                                                    : 'hover:shadow-md cursor-move'
+                                                    }`}
+                                            >
+                                                {/* Order Badge */}
+                                                <div className="absolute top-2 left-2 bg-primary text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+                                                    {image.order}
+                                                </div>
+
+                                                {/* Image Preview */}
+                                                <div className="mb-3">
+                                                    <img
+                                                        src={image.imageUrl}
+                                                        alt={image.altText || 'Product image'}
+                                                        className="w-full h-40 object-cover rounded"
+                                                        onError={(e) => {
+                                                            e.currentTarget.src = 'https://via.placeholder.com/300x200?text=Image+Not+Found';
+                                                        }}
+                                                    />
+                                                </div>
+
+                                                {editingImage === image.id ? (
+                                                    // Edit Mode
+                                                    <div className="space-y-2">
+                                                        <input
+                                                            type="text"
+                                                            value={editImageUrl}
+                                                            onChange={(e) => setEditImageUrl(e.target.value)}
+                                                            placeholder="Image URL"
+                                                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-1 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            value={editImageAltText}
+                                                            onChange={(e) => setEditImageAltText(e.target.value)}
+                                                            placeholder="Alt Text"
+                                                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-1 focus:ring-primary dark:bg-gray-800 dark:text-white"
+                                                        />
+                                                        <div className="flex gap-2">
+                                                            <Button
+                                                                type="button"
+                                                                variant="primary"
+                                                                size="sm"
+                                                                onClick={handleUpdateImage}
+                                                                disabled={updateImageMutation.isPending}
+                                                            >
+                                                                Save
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={handleCancelEditImage}
+                                                            >
+                                                                Cancel
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    // View Mode
+                                                    <div className="space-y-2">
+                                                        {image.altText && (
+                                                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                                                <span className="font-medium">Alt:</span> {image.altText}
+                                                            </p>
+                                                        )}
+                                                        <p className="text-xs text-gray-500 dark:text-gray-500 truncate">
+                                                            {image.imageUrl}
+                                                        </p>
+                                                        <div className="flex gap-2">
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleEditImage(image)}
+                                                            >
+                                                                Edit
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                variant="danger"
+                                                                size="sm"
+                                                                onClick={() => handleDeleteImage(image.id)}
+                                                                disabled={deleteImageMutation.isPending}
+                                                            >
+                                                                Delete
+                                                            </Button>
+                                                        </div>
+                                                    </div>
                                                 )}
                                             </div>
                                         ))}

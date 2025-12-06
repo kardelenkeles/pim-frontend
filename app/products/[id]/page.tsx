@@ -6,6 +6,7 @@ import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { productService } from '@/services/productService';
 import { productAttributeService } from '@/services/productAttributeService';
+import { productImageService } from '@/services/productImageService';
 import { ApiError } from '@/lib/apiClient';
 
 export default function ProductDetailPage() {
@@ -24,6 +25,18 @@ export default function ProductDetailPage() {
     const { data: attributes = [], isLoading: attributesLoading } = useQuery({
         queryKey: ['product-attributes', productId],
         queryFn: () => productAttributeService.getByProductId(productId),
+        enabled: !isNaN(productId),
+    });
+
+    // Fetch product images
+    const { data: images = [], isLoading: imagesLoading } = useQuery({
+        queryKey: ['product-images', productId],
+        queryFn: async () => {
+            console.log('[Detail View] Fetching images for product:', productId);
+            const result = await productImageService.getByProductId(productId);
+            console.log('[Detail View] Images fetched:', result);
+            return result;
+        },
         enabled: !isNaN(productId),
     });
 
@@ -199,33 +212,6 @@ export default function ProductDetailPage() {
                                 </div>
                             </div>
                         )}
-
-                        {/* Images Card */}
-                        {product.images && product.images.length > 0 && (
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
-                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                                    Images
-                                </h2>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                    {product.images.map((image, index) => (
-                                        <div
-                                            key={index}
-                                            className="aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
-                                        >
-                                            <img
-                                                src={image.imageUrl}
-                                                alt={image.altText || `${product.title} - Image ${index + 1}`}
-                                                className="w-full h-full object-cover"
-                                                onError={(e) => {
-                                                    const target = e.target as HTMLImageElement;
-                                                    target.style.display = 'none';
-                                                }}
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
                     </div>
 
                     {/* Sidebar */}
@@ -310,6 +296,55 @@ export default function ProductDetailPage() {
                             </dl>
                         </div>
                     </div>
+
+                    {/* Product Images */}
+                    {!imagesLoading && Array.isArray(images) && images.length > 0 && (
+                        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
+                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                Product Images ({images.length})
+                            </h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {[...images].sort((a, b) => a.order - b.order).map((image) => {
+                                    console.log('[Detail View] Rendering image:', image);
+                                    return (
+                                        <div
+                                            key={image.id}
+                                            className="relative border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden group"
+                                        >
+                                            {/* Order Badge */}
+                                            <div className="absolute top-2 left-2 bg-primary text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold z-10">
+                                                {image.order}
+                                            </div>
+
+                                            {/* Image */}
+                                            <img
+                                                src={image.imageUrl}
+                                                alt={image.altText || `Product image ${image.order}`}
+                                                className="w-full h-64 object-cover"
+                                                onLoad={() => console.log('[Detail View] Image loaded successfully:', image.imageUrl)}
+                                                onError={(e) => {
+                                                    console.error('[Detail View] Image failed to load:', image.imageUrl);
+                                                    e.currentTarget.src = 'https://via.placeholder.com/400x300?text=Image+Not+Found';
+                                                }}
+                                            />
+
+                                            {/* Alt Text Overlay */}
+                                            {image.altText && (
+                                                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <p className="text-white text-sm line-clamp-2">
+                                                        {image.altText}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </>
