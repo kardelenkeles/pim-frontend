@@ -27,9 +27,19 @@ export interface DashboardStats {
     productsWithoutCategory: number;
     productsWithoutBrand: number;
     recentProducts: Product[];
+    lowQualityProducts?: number;
+    highQualityProducts?: number;
 }
 
-export type ExportFormat = 'CSV' | 'JSON';
+export interface QualityStats {
+    averageScore: number;
+    highQualityCount: number;
+    mediumQualityCount: number;
+    lowQualityCount: number;
+    productsWithoutQuality: number;
+}
+
+export type ExportFormat = 'csv' | 'json';
 
 class DashboardService {
     private readonly endpoint = '/dashboard';
@@ -43,16 +53,27 @@ class DashboardService {
     }
 
     /**
-     * Export products to CSV or JSON
+     * Export products to CSV
      */
-    async exportProducts(format: ExportFormat = 'CSV', params?: {
-        categoryId?: number;
-        brandId?: number;
-        status?: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
-    }): Promise<Blob> {
-        return apiClient.get<Blob>(`${this.productsEndpoint}/export`, {
-            params: { format, ...params },
+    async exportProductsToCsv(): Promise<string> {
+        const response = await fetch(`http://localhost:8080/api${this.endpoint}/products/export?format=csv`, {
+            headers: {
+                'Content-Type': 'text/csv',
+            },
         });
+        return response.text();
+    }
+
+    /**
+     * Export products to JSON
+     */
+    async exportProductsToJson(): Promise<string> {
+        const response = await fetch(`http://localhost:8080/api${this.endpoint}/products/export?format=json`, {
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+        return response.text();
     }
 
     /**
@@ -60,6 +81,13 @@ class DashboardService {
      */
     async getStats(): Promise<DashboardStats> {
         return apiClient.get<DashboardStats>(`${this.endpoint}/stats`);
+    }
+
+    /**
+     * Get quality control statistics
+     */
+    async getQualityStats(): Promise<QualityStats> {
+        return apiClient.get<QualityStats>(`${this.endpoint}/quality-stats`);
     }
 }
 

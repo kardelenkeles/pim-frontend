@@ -15,6 +15,29 @@ export default function Home() {
     queryFn: () => dashboardService.getStats(),
   });
 
+  const handleExport = async (format: 'csv' | 'json') => {
+    try {
+      const content = format === 'csv'
+        ? await dashboardService.exportProductsToCsv()
+        : await dashboardService.exportProductsToJson();
+
+      const blob = new Blob([content], {
+        type: format === 'csv' ? 'text/csv' : 'application/json'
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `products.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Export failed. Please try again.');
+    }
+  };
+
   const stats = statsData ? [
     { label: 'Total Products', value: statsData.totalProducts.toString() },
     { label: 'Active Products', value: statsData.activeProducts.toString() },
@@ -71,11 +94,19 @@ export default function Home() {
               Welcome to your PIM admin panel
             </p>
           </div>
-          <Link href="/products">
-            <Button variant="primary">
-              View Products
+          <div className="flex gap-3">
+            <Button variant="ghost" onClick={() => handleExport('csv')}>
+              Export CSV
             </Button>
-          </Link>
+            <Button variant="ghost" onClick={() => handleExport('json')}>
+              Export JSON
+            </Button>
+            <Link href="/products">
+              <Button variant="primary">
+                View Products
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Stats Grid */}
@@ -98,6 +129,107 @@ export default function Home() {
             ))}
           </div>
         )}
+
+        {/* Quality Control */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Quality Control
+            </h2>
+          </div>
+          {statsLoading ? (
+            <div className="text-center py-4">
+              <p className="text-gray-500 dark:text-gray-400">Loading quality stats...</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <div className="text-3xl font-bold text-green-600 dark:text-green-400">
+                  {statsData?.highQualityProducts || 0}
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  High Quality (80%+)
+                </div>
+              </div>
+              <div className="text-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                <div className="text-3xl font-bold text-yellow-600 dark:text-yellow-400">
+                  {(statsData?.totalProducts || 0) - (statsData?.highQualityProducts || 0) - (statsData?.lowQualityProducts || 0)}
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  Medium Quality (50-79%)
+                </div>
+              </div>
+              <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                <div className="text-3xl font-bold text-red-600 dark:text-red-400">
+                  {statsData?.lowQualityProducts || 0}
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  Low Quality (&lt;50%)
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Data Insights */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Products Without Images
+              </h3>
+            </div>
+            <div className="text-3xl font-bold text-gray-900 dark:text-white">
+              {statsData?.productsWithoutImages || 0}
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+              Products missing product images
+            </p>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-purple-100 dark:bg-purple-900/20 rounded-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Without Category
+              </h3>
+            </div>
+            <div className="text-3xl font-bold text-gray-900 dark:text-white">
+              {statsData?.productsWithoutCategory || 0}
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+              Products not assigned to a category
+            </p>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-orange-100 dark:bg-orange-900/20 rounded-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Without Brand
+              </h3>
+            </div>
+            <div className="text-3xl font-bold text-gray-900 dark:text-white">
+              {statsData?.productsWithoutBrand || 0}
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+              Products without brand assignment
+            </p>
+          </div>
+        </div>
 
         {/* Recent Products Table */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">

@@ -23,25 +23,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        {/* Search */}
-                        <div className="hidden md:block">
-                            <div className="relative">
-                                <input
-                                    type="search"
-                                    placeholder="Search..."
-                                    className="w-64 px-4 py-2 pl-10 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:text-white"
-                                />
-                                <svg
-                                    className="absolute left-3 top-2.5 w-4 h-4 text-gray-400"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                >
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                            </div>
-                        </div>
-
                         {/* Notifications */}
                         <button className="p-2 text-gray-500 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
