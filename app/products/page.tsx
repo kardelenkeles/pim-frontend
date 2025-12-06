@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -26,6 +27,7 @@ import { ApiError } from '@/lib/apiClient';
 type ModalMode = 'add' | 'edit' | 'delete' | null;
 
 export default function ProductsPage() {
+    const router = useRouter();
     const queryClient = useQueryClient();
     const [error, setError] = useState<string | null>(null);
     const [modalMode, setModalMode] = useState<ModalMode>(null);
@@ -104,9 +106,11 @@ export default function ProductsPage() {
     // TanStack Mutations
     const createMutation = useMutation({
         mutationFn: (data: CreateProductDto) => productService.create(data),
-        onSuccess: () => {
+        onSuccess: (createdProduct) => {
             queryClient.invalidateQueries({ queryKey: ['products'] });
             closeModal();
+            // Redirect to edit page to add attributes
+            router.push(`/products/${createdProduct.id}/edit`);
         },
         onError: (err: any) => {
             if (err instanceof ApiError) {
@@ -505,6 +509,15 @@ export default function ProductsPage() {
                 size="xl"
             >
                 <form onSubmit={modalMode === 'add' ? createForm.handleSubmit(handleCreateSubmit) : updateForm.handleSubmit(handleUpdateSubmit)} className="space-y-4">
+                    {/* Info Note for Add Mode */}
+                    {modalMode === 'add' && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                            <p className="text-sm text-blue-800 dark:text-blue-300">
+                                ℹ️ After creating the product, you'll be redirected to the edit page where you can add custom attributes (key-value pairs) to define unlimited product properties.
+                            </p>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Title */}
                         <div>

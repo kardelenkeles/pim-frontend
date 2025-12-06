@@ -1,62 +1,79 @@
 import { apiClient } from '@/lib/apiClient';
 
+interface ApiResponse<T> {
+    data: T[];
+}
+
 export interface ProductAttribute {
-    id?: number;
+    id: number;
     productId: number;
-    attributeKey: string;
-    attributeValue: string;
-    createdAt?: string;
-    updatedAt?: string;
+    key: string;
+    value: string;
 }
 
-export interface AddAttributeDto {
-    attributeKey: string;
-    attributeValue: string;
+export interface ProductAttributeRequest {
+    productId: number;
+    key: string;
+    value: string;
 }
 
-export interface UpdateAttributeDto {
-    attributeValue: string;
+export interface ProductAttributeUpdateRequest {
+    key?: string;
+    value?: string;
 }
 
 class ProductAttributeService {
-    private readonly endpoint = '/products';
+    private readonly endpoint = '/product-attributes';
 
     /**
-     * Add attribute to product
+     * Create a new product attribute
      */
-    async add(productId: number, data: AddAttributeDto): Promise<ProductAttribute> {
-        return apiClient.post<ProductAttribute>(
-            `${this.endpoint}/${productId}/attributes`,
-            data
-        );
+    async create(data: ProductAttributeRequest): Promise<ProductAttribute> {
+        return apiClient.post<ProductAttribute>(this.endpoint, data);
     }
 
     /**
      * Update product attribute
      */
-    async update(productId: number, attributeKey: string, data: UpdateAttributeDto): Promise<ProductAttribute> {
-        return apiClient.put<ProductAttribute>(
-            `${this.endpoint}/${productId}/attributes/${attributeKey}`,
-            data
-        );
+    async update(id: number, data: ProductAttributeUpdateRequest): Promise<ProductAttribute> {
+        return apiClient.put<ProductAttribute>(`${this.endpoint}/${id}`, data);
     }
 
     /**
      * Delete product attribute
      */
-    async delete(productId: number, attributeKey: string): Promise<void> {
-        return apiClient.delete<void>(
-            `${this.endpoint}/${productId}/attributes/${attributeKey}`
-        );
+    async delete(id: number): Promise<void> {
+        return apiClient.delete<void>(`${this.endpoint}/${id}`);
+    }
+
+    /**
+     * Get attribute by ID
+     */
+    async getById(id: number): Promise<ProductAttribute> {
+        return apiClient.get<ProductAttribute>(`${this.endpoint}/${id}`);
     }
 
     /**
      * Get all attributes for a product
      */
-    async getAll(productId: number): Promise<Record<string, any>> {
-        return apiClient.get<Record<string, any>>(
-            `${this.endpoint}/${productId}/attributes`
-        );
+    async getByProductId(productId: number): Promise<ProductAttribute[]> {
+        const response = await apiClient.get<ApiResponse<ProductAttribute>>(`${this.endpoint}/product/${productId}`);
+        return response.data;
+    }
+
+    /**
+     * Get all attributes with a specific key
+     */
+    async getByKey(key: string): Promise<ProductAttribute[]> {
+        const response = await apiClient.get<ApiResponse<ProductAttribute>>(`${this.endpoint}/key/${key}`);
+        return response.data;
+    }
+
+    /**
+     * Delete all attributes for a product
+     */
+    async deleteByProductId(productId: number): Promise<void> {
+        return apiClient.delete<void>(`${this.endpoint}/product/${productId}`);
     }
 }
 

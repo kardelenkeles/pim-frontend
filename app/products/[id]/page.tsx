@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Breadcrumb } from '@/components/layout/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { productService } from '@/services/productService';
+import { productAttributeService } from '@/services/productAttributeService';
 import { ApiError } from '@/lib/apiClient';
 
 export default function ProductDetailPage() {
@@ -16,6 +17,13 @@ export default function ProductDetailPage() {
     const { data: product, isLoading, error } = useQuery({
         queryKey: ['product', productId],
         queryFn: () => productService.getById(productId),
+        enabled: !isNaN(productId),
+    });
+
+    // Fetch product attributes
+    const { data: attributes = [], isLoading: attributesLoading } = useQuery({
+        queryKey: ['product-attributes', productId],
+        queryFn: () => productAttributeService.getByProductId(productId),
         enabled: !isNaN(productId),
     });
 
@@ -167,23 +175,28 @@ export default function ProductDetailPage() {
                         </div>
 
                         {/* Attributes Card */}
-                        {product.attributes && Object.keys(product.attributes).length > 0 && (
+                        {Array.isArray(attributes) && attributes.length > 0 && (
                             <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
                                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                                    Attributes
+                                    Product Attributes
                                 </h2>
-                                <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {Object.entries(product.attributes).map(([key, value]) => (
-                                        <div key={key}>
-                                            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 capitalize">
-                                                {key.replace(/_/g, ' ')}
-                                            </dt>
-                                            <dd className="mt-1 text-base text-gray-900 dark:text-white">
-                                                {String(value)}
-                                            </dd>
+                                <div className="space-y-3">
+                                    {attributes.map((attr) => (
+                                        <div
+                                            key={attr.id}
+                                            className="flex justify-between items-start p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
+                                        >
+                                            <div className="flex-1">
+                                                <dt className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    {attr.key}
+                                                </dt>
+                                                <dd className="mt-1 text-base text-gray-900 dark:text-white">
+                                                    {attr.value}
+                                                </dd>
+                                            </div>
                                         </div>
                                     ))}
-                                </dl>
+                                </div>
                             </div>
                         )}
 
